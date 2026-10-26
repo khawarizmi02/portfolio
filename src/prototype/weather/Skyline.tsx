@@ -59,12 +59,12 @@ function petronasTower(mat: THREE.Material, tipMat: THREE.Material) {
   return tower;
 }
 
-function menaraKL(mat: THREE.Material, podMat: THREE.Material, tipMat: THREE.Material) {
+function menaraKL(mat: THREE.Material, shaftMat: THREE.Material, podMat: THREE.Material, tipMat: THREE.Material) {
   const g = new THREE.Group();
   const hill = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat);
   hill.scale.y = 0.35;
   g.add(hill);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.17, 3.6, 10), mat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.17, 3.6, 10), shaftMat);
   shaft.position.y = 0.4 + 1.8;
   g.add(shaft);
   const profile = [
@@ -84,6 +84,69 @@ function menaraKL(mat: THREE.Material, podMat: THREE.Material, tipMat: THREE.Mat
   g.add(mast);
   g.userData.tip = new THREE.Vector3(0, 5.97, 0);
   return g;
+}
+
+// Merdeka 118: faceted glass tower. Each ring is rotated half a step from the last, so the faces fold into
+// the diamond facets of its songket-inspired skin. Tapers into a crown and a long spire.
+function merdeka118(glassMat: THREE.Material, tipMat: THREE.Material) {
+  const g = new THREE.Group();
+  const S = 8,
+    RINGS = 14,
+    H = 6.2;
+  const radius = (t: number) => 0.62 - 0.36 * t ** 1.5 - (t > 0.9 ? (t - 0.9) * 1.6 : 0);
+  const ring = (k: number) =>
+    Array.from({ length: S }, (_, i) => {
+      const t = k / RINGS;
+      const a = ((i + (k % 2) * 0.5) / S) * Math.PI * 2;
+      return new THREE.Vector3(Math.cos(a) * radius(t), t * H, Math.sin(a) * radius(t));
+    });
+  const pos: number[] = [];
+  for (let k = 0; k < RINGS; k++) {
+    const A = ring(k),
+      B = ring(k + 1);
+    for (let i = 0; i < S; i++) {
+      const a0 = A[i],
+        a1 = A[(i + 1) % S],
+        b0 = B[i],
+        b1 = B[(i + 1) % S];
+      // odd rings are shifted forward, even rings back: pick the diagonal that follows the shift
+      const tris = k % 2 === 0 ? [a0, b0, a1, a1, b0, b1] : [a0, b0, b1, a0, b1, a1];
+      tris.forEach((v) => pos.push(v.x, v.y, v.z));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, glassMat);
+  (body.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+  g.add(body);
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.07, 2.6, 6), tipMat);
+  spire.position.y = H + 1.3;
+  g.add(spire);
+  g.userData.tip = new THREE.Vector3(0, H + 2.6, 0);
+  return g;
+}
+
+function glowSprite(color: THREE.Color, size: number) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const x = c.getContext("2d")!;
+  const grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.25, "rgba(255,255,255,.45)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = grad;
+  x.fillRect(0, 0, 64, 64);
+  const mat = new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(c),
+    color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.setScalar(size);
+  return sp;
 }
 
 function windowTexture() {
@@ -129,7 +192,7 @@ function recipe(cond: Condition, isDay: boolean): Recipe {
     case "storm":
       return { hemi: night ? 0.3 : 0.45, sun: 0.12, sunColor: "#c9c0ff", sunPos: [2, 9, 6], fog: 0.06, windows: night ? 1 : 0.55, clouds: "storm", rain: 900 };
     case "haze":
-      return { hemi: night ? 0.5 : 0.95, sun: night ? 0.2 : 0.6, sunColor: "#ffcf8a", sunPos: [5, 6, 5], fog: 0.1, windows: night ? 0.8 : 0, clouds: "none", rain: 0 };
+      return { hemi: night ? 0.5 : 0.5, sun: night ? 0.2 : 0.35, sunColor: "#ffcf8a", sunPos: [5, 6, 5], fog: 0.05, windows: night ? 0.8 : 0, clouds: "none", rain: 0 };
   }
 }
 
@@ -182,9 +245,27 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
     });
     const klcc = new THREE.Group();
     klcc.add(twinL, twinR, bridge, ...legs);
-    const menara = menaraKL(bodyMat, steelMat, tipMat);
+    const klShaftMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6 });
+    const klPodMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.4, metalness: 0.3 });
+    const menara = menaraKL(bodyMat, klShaftMat, klPodMat, tipMat);
     menara.position.set(3.6, 0, -2.2);
-    scene.add(klcc, menara);
+    const glassMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.25, metalness: 0.55 });
+    const merdeka = merdeka118(glassMat, tipMat);
+    merdeka.position.set(-3.3, 0, -5);
+    scene.add(klcc, menara, merdeka);
+
+    // night glows at the crowns
+    const glows = [
+      glowSprite(new THREE.Color("#e6eeff"), 1.6),
+      glowSprite(new THREE.Color("#e6eeff"), 1.6),
+      glowSprite(new THREE.Color("#b9c6ff"), 1.5),
+      glowSprite(new THREE.Color("#cfe2ff"), 1.4),
+    ];
+    glows[0].position.set(-0.85, 4.9, 0.1);
+    glows[1].position.set(0.85, 4.9, 0.1);
+    glows[2].position.set(3.6, 4.15, -2.1);
+    glows[3].position.set(-3.3, 6.4, -4.9);
+    scene.add(...glows);
 
     // filler city, deterministic-ish so it doesn't reshuffle on every mount
     let seed = 7;
@@ -194,6 +275,7 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       const x = (rnd() - 0.5) * 14,
         z = -5 + rnd() * 7.5;
       if (Math.abs(x) < 1.7 && z > -1.5) continue; // keep KLCC clear
+      if (Math.hypot(x + 3.3, z + 5) < 1.1) continue; // and Merdeka 118
       if (Math.hypot(x - 3.6, z + 2.2) < 1.3) continue; // and the hill
       const h = 0.3 + rnd() ** 2 * 2.4;
       const b = new THREE.Mesh(box, fillerMat);
@@ -245,7 +327,8 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
     scene.add(bolt);
     let boltUntil = 0;
     const strike = () => {
-      const target = rnd() < 0.5 ? twinR : menara;
+      const r = rnd();
+      const target = r < 0.4 ? merdeka : r < 0.7 ? twinR : menara;
       const tip = target.userData.tip.clone().add(target.position);
       const pts: THREE.Vector3[] = [];
       for (let k = 0, y = 9.5; y > tip.y; k++, y -= 0.45 + rnd() * 0.35)
@@ -274,17 +357,30 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       sun.color.set(state.sunColor);
       sun.intensity = state.sun;
       sun.position.set(...state.sunPos);
-      bodyMat.color.copy(bg.clone().lerp(text, 0.28));
-      steelMat.color.copy(bg.clone().lerp(text, 0.62));
-      fillerMat.color.copy(bg.clone().lerp(text, 0.18));
+      // haze needs more contrast so the outline survives the fog
+      const k = c === "haze" ? 1.7 : 1;
+      bodyMat.color.copy(bg.clone().lerp(text, 0.28 * k));
+      steelMat.color.copy(bg.clone().lerp(text, Math.min(0.62 * k, 0.8)));
+      glassMat.color.copy(bg.clone().lerp(text, 0.5 * k).lerp(new THREE.Color("#8fb4d8"), 0.25));
+      klShaftMat.color.copy(bg.clone().lerp(text, 0.32 * k));
+      klPodMat.color.copy(bg.clone().lerp(text, 0.5 * k));
+      fillerMat.color.copy(bg.clone().lerp(text, 0.18 * k));
       fillerMat.emissiveIntensity = state.windows * 1.4;
       fillerMat.emissive.copy(accent.clone().lerp(new THREE.Color("#ffd9a0"), 0.6));
       tipMat.color.copy(accent);
       tipMat.emissive.copy(accent);
       tipMat.emissiveIntensity = day ? 0.15 : 1.2;
       // Petronas glows silver at night
-      steelMat.emissive.copy(text.clone().lerp(new THREE.Color("#dfe8ff"), 0.5));
-      steelMat.emissiveIntensity = day ? 0 : 0.22;
+      // night: Petronas glows silver, Menara KL's pod lights up, Merdeka's glass catches a cool glow
+      steelMat.emissive.set("#dfe7ff");
+      steelMat.emissiveIntensity = day ? 0 : 0.55;
+      klShaftMat.emissive.set("#cdd6ff");
+      klShaftMat.emissiveIntensity = day ? 0 : 0.25;
+      klPodMat.emissive.copy(accent.clone().lerp(new THREE.Color("#b8c4ff"), 0.55));
+      klPodMat.emissiveIntensity = day ? 0 : 1.1;
+      glassMat.emissive.set("#a9c8f0");
+      glassMat.emissiveIntensity = day ? 0 : 0.3;
+      glows.forEach((g) => (g.visible = !day));
       groundMat.color.copy(bg.clone().lerp(text, 0.08));
       cloudMat.color.copy(
         bg.clone().lerp(text, state.clouds === "light" ? 0.55 : state.clouds === "dark" ? 0.32 : 0.22),
@@ -331,8 +427,8 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       const t = now / 1000;
       camX += ((reduce ? 0 : Math.sin(t * 0.08) * 1.4) + mx * 1.1 - camX) * 0.04;
       camY += (my * -0.5 - camY) * 0.04;
-      camera.position.set(camX, 2.6 + camY, 15);
-      camera.lookAt(0.9, 2.6, -0.5);
+      camera.position.set(camX, 3 + camY, 16);
+      camera.lookAt(0.4, 3.5, -1);
 
       if (clouds.visible)
         clouds.children.forEach((cl) => {
