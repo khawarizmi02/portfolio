@@ -79,7 +79,7 @@ function leafGeo() {
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i),
       y = p.getY(i);
-    p.setXYZ(i, x, 0.9 * x * x + 0.22 * y, -y);
+    p.setXYZ(i, x, 0.6 * x * x + 0.1 * y, -y);
   }
   g.computeVertexNormals();
   return g;
@@ -334,12 +334,14 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
     grand.add(l, mast);
   }
   grand.position.copy(trackPoint(-150, 92));
-  grand.rotation.y = Math.PI + 0.08; // seats face the main straight
-  grand.userData.tip = new THREE.Vector3(0, 1.1, 0);
+  grand.rotation.y = 0.08; // seats and canopies face the viewer rather than the main straight, so they read
+  // exaggerated so the leaf canopies read at this distance; it overhangs the straights a little
+  grand.scale.setScalar(1.7);
+  grand.userData.tip = new THREE.Vector3(0, 1.1 * 1.7, 0);
   group.add(grand);
   grand.updateMatrixWorld();
   [-0.9, 0, 0.9].forEach((x) => {
-    const f = glow(new THREE.Color("#fff3d6"), 0.7);
+    const f = glow(new THREE.Color("#fff3d6"), 1);
     f.position.copy(grand.localToWorld(new THREE.Vector3(x, 1.3, -0.3)));
     glows.push(f);
   });
