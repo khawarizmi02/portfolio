@@ -27,7 +27,7 @@ const SEPANG = [
 // puts the current values on the clipboard, ready to paste over this object.
 // prettier-ignore
 export const LAYOUT = {
-  grandstand: { x: 3.93, z: -0.98, rotation: 3.22, scale: 1, depth: 1 },
+  grandstand: { x: 5.88, z: -1.19, rotation: 3.28, scale: 1, depth: 0.56 },
   tower: { x: -1.5, z: -2.4, scale: 0.52 },
   kliaLabel: { x: -5.6, y: 2.5, z: -3.2 },
   sepangLabel: { x: 5.83, y: 2.1, z: -4.9 },
