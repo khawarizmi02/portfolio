@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { WeatherChip, WeatherHero, useWeatherTermLines } from "./weather/WeatherHero";
 
 const OPEN_TO_WORK = true;
 const SHOW_DEMOS = true;
@@ -31,10 +32,10 @@ const TERM_LINES = [
   },
 ];
 
-function useTerminalLines() {
+function useTerminalLines(source: typeof TERM_LINES) {
   const total = useMemo(
-    () => TERM_LINES.reduce((a, l) => a + l.text.length, 0),
-    [],
+    () => source.reduce((a, l) => a + l.text.length, 0),
+    [source],
   );
   const [n, setN] = useState(0);
 
@@ -52,7 +53,7 @@ function useTerminalLines() {
   let left = n;
   const lines: { prefix: string; color: string; text: string; cursor: boolean }[] =
     [];
-  for (const line of TERM_LINES) {
+  for (const line of source) {
     if (left <= 0) break;
     lines.push({ ...line, text: line.text.slice(0, left), cursor: false });
     left -= line.text.length;
@@ -99,13 +100,94 @@ function useReveal() {
 }
 
 function App(): React.ReactElement {
-  const term = useTerminalLines();
+  const weatherLines = useWeatherTermLines();
+  const termLines = useMemo(() => [...TERM_LINES, ...weatherLines], [weatherLines]);
+  const term = useTerminalLines(termLines);
   const reveal = useReveal();
+
+  const terminal = (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: -24,
+          background:
+            "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 75%)",
+          filter: "blur(10px)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          background: "var(--color-neutral-900)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-md)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "12px 16px",
+            borderBottom: "1px solid color-mix(in srgb, var(--color-text) 8%, transparent)",
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span
+            style={{
+              marginLeft: 10,
+              fontSize: 11,
+              color: "var(--color-neutral-600)",
+              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+            }}
+          >
+            khawarizmi@dev ~ zsh
+          </span>
+        </div>
+        <div
+          style={{
+            padding: "18px 20px 22px",
+            fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+            fontSize: 13,
+            lineHeight: 1.7,
+            minHeight: 236,
+          }}
+        >
+          {term.map((ln, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span style={{ color: "var(--color-accent)", flex: "none", width: 14 }}>{ln.prefix}</span>
+              <span style={{ color: ln.color, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {ln.text}
+                {ln.cursor && (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 14,
+                      background: "var(--color-accent)",
+                      marginLeft: 2,
+                      verticalAlign: -2,
+                      animation: "kj-blink 1s steps(1) infinite",
+                    }}
+                  />
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div
+      className="wx-page"
       style={{
-        background: "var(--color-bg)",
         color: "var(--color-text)",
         fontFamily: "var(--font-body)",
         minHeight: "100vh",
@@ -131,6 +213,7 @@ function App(): React.ReactElement {
             <span style={{ fontSize: 15 }}>Khawarizmi Jefri</span>
           </a>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <WeatherChip />
             <a href="#work">Work</a>
             <a href="#stack">Stack</a>
             <a href="#freelance">Freelance</a>
@@ -146,180 +229,7 @@ function App(): React.ReactElement {
         </div>
       </nav>
 
-      <section id="home" style={{ position: "relative", overflow: "hidden" }}>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(720px 420px at 78% -10%, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 70%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            maxWidth: 1120,
-            margin: "0 auto",
-            padding: "88px 32px 72px",
-            position: "relative",
-            display: "grid",
-            gridTemplateColumns: "minmax(320px, 1.1fr) minmax(300px, 0.9fr)",
-            gap: 56,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 20 }}>
-            {OPEN_TO_WORK && (
-              <span className="tag tag-outline" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 12px" }}>
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "var(--color-accent)",
-                    animation: "kj-pulse 2.4s ease infinite",
-                  }}
-                />
-                Open for freelance work · Kuala Lumpur
-              </span>
-            )}
-            <h1
-              style={{
-                fontSize: "clamp(42px, 5.4vw, 68px)",
-                lineHeight: 1.05,
-                letterSpacing: "-0.02em",
-                margin: 0,
-                fontWeight: 500,
-                textWrap: "balance",
-              }}
-            >
-              Backends that hold up. <span style={{ color: "var(--color-accent-300)" }}>Frontends that feel alive.</span>
-            </h1>
-            <p style={{ fontSize: 17, lineHeight: 1.65, color: "var(--color-neutral-400)", maxWidth: "52ch", margin: 0 }}>
-              Hi, I'm Khawarizmi, a full-stack software engineer. I design, build, and ship complete web applications: Go
-              and PostgreSQL under the hood, React and TypeScript up front. Yes, both halves.
-            </p>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-              <a
-                className="btn btn-primary"
-                href="mailto:khawarizmijefri02@gmail.com?subject=Let%27s%20build%20something"
-                style={{ padding: "10px 20px", fontSize: 15 }}
-              >
-                Let's talk about your project <i className="ph ph-arrow-right" />
-              </a>
-              <a className="btn btn-secondary" href="#work" style={{ padding: "10px 20px", fontSize: 15 }}>
-                See my work
-              </a>
-            </div>
-            <div style={{ width: "100%", marginTop: 24 }}>
-              <div
-                style={{
-                  height: 1,
-                  background:
-                    "linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent)",
-                  marginBottom: 20,
-                }}
-              />
-              <div style={{ display: "flex", gap: 48, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 26, fontFamily: "var(--font-heading)", fontWeight: 500, color: "var(--color-accent-300)" }}>
-                    1+
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>years shipping web apps</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 26, fontFamily: "var(--font-heading)", fontWeight: 500, color: "var(--color-accent-300)" }}>
-                    3
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>client demo sites live</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 26, fontFamily: "var(--font-heading)", fontWeight: 500, color: "var(--color-accent-300)" }}>
-                    ×1
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>engineer, end to end</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                position: "absolute",
-                inset: -24,
-                background:
-                  "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 75%)",
-                filter: "blur(10px)",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                position: "relative",
-                background: "var(--color-neutral-900)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-md)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "12px 16px",
-                  borderBottom: "1px solid color-mix(in srgb, var(--color-text) 8%, transparent)",
-                }}
-              >
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 11,
-                    color: "var(--color-neutral-600)",
-                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                  }}
-                >
-                  khawarizmi@dev ~ zsh
-                </span>
-              </div>
-              <div
-                style={{
-                  padding: "18px 20px 22px",
-                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  minHeight: 236,
-                }}
-              >
-                {term.map((ln, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--color-accent)", flex: "none", width: 14 }}>{ln.prefix}</span>
-                    <span style={{ color: ln.color, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {ln.text}
-                      {ln.cursor && (
-                        <span
-                          style={{
-                            display: "inline-block",
-                            width: 8,
-                            height: 14,
-                            background: "var(--color-accent)",
-                            marginLeft: 2,
-                            verticalAlign: -2,
-                            animation: "kj-blink 1s steps(1) infinite",
-                          }}
-                        />
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <WeatherHero openToWork={OPEN_TO_WORK} terminal={terminal} />
 
       <section id="work" style={{ padding: "88px 0 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 32px" }}>
@@ -519,7 +429,7 @@ function App(): React.ReactElement {
         id="freelance"
         style={{
           background:
-            "radial-gradient(900px 420px at 18% 0%, var(--color-section-glow), transparent 70%), var(--color-section)",
+            "radial-gradient(900px 420px at 18% 0%, color-mix(in oklch, var(--color-section-glow) 80%, transparent), transparent 70%), color-mix(in oklch, var(--color-section) 80%, transparent)",
           padding: "88px 0",
         }}
       >

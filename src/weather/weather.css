@@ -1,0 +1,31 @@
+/* Weather theme support. Colours themselves are set as tokens on :root by WeatherProvider. */
+
+body, nav, section, footer, .card, .tag, .btn {
+  transition: background-color 0.7s ease, color 0.7s ease, border-color 0.7s ease;
+}
+
+/* The atmosphere layer sits behind the page; content stacks above it. */
+.wx-page > section,
+.wx-page > footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Dark logo tile → light tile on light themes, keeping the gold diamond. */
+html[data-theme-mode="light"] .nav-brand img {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+@media (max-width: 640px) {
+  .wx-chip { display: none !important; }
+}
+
+@keyframes wx-drift {
+  from { transform: translateX(-12vw); }
+  to { transform: translateX(12vw); }
+}
+
+@keyframes wx-breathe {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
