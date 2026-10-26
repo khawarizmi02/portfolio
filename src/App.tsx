@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { ForecastHero, WeatherChip, featuresOf, useWeatherProto, weatherTermLines } from "./prototype/weather/WeatherPrototype";
 
 const OPEN_TO_WORK = true;
 const SHOW_DEMOS = true;
@@ -31,10 +32,10 @@ const TERM_LINES = [
   },
 ];
 
-function useTerminalLines() {
+function useTerminalLines(source: typeof TERM_LINES) {
   const total = useMemo(
-    () => TERM_LINES.reduce((a, l) => a + l.text.length, 0),
-    [],
+    () => source.reduce((a, l) => a + l.text.length, 0),
+    [source],
   );
   const [n, setN] = useState(0);
 
@@ -52,7 +53,7 @@ function useTerminalLines() {
   let left = n;
   const lines: { prefix: string; color: string; text: string; cursor: boolean }[] =
     [];
-  for (const line of TERM_LINES) {
+  for (const line of source) {
     if (left <= 0) break;
     lines.push({ ...line, text: line.text.slice(0, left), cursor: false });
     left -= line.text.length;
@@ -99,8 +100,90 @@ function useReveal() {
 }
 
 function App(): React.ReactElement {
-  const term = useTerminalLines();
+  const weather = useWeatherProto();
+  const wx = featuresOf(weather.variant);
+  const weatherLines = useMemo(() => weatherTermLines(weather), [weather]);
+  const term = useTerminalLines(wx.weatherTerminal ? [...TERM_LINES, ...weatherLines] : TERM_LINES);
   const reveal = useReveal();
+
+  const terminal = (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: -24,
+          background:
+            "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 75%)",
+          filter: "blur(10px)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          background: "var(--color-neutral-900)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-md)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "12px 16px",
+            borderBottom: "1px solid color-mix(in srgb, var(--color-text) 8%, transparent)",
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
+          <span
+            style={{
+              marginLeft: 10,
+              fontSize: 11,
+              color: "var(--color-neutral-600)",
+              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+            }}
+          >
+            khawarizmi@dev ~ zsh
+          </span>
+        </div>
+        <div
+          style={{
+            padding: "18px 20px 22px",
+            fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+            fontSize: 13,
+            lineHeight: 1.7,
+            minHeight: 236,
+          }}
+        >
+          {term.map((ln, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span style={{ color: "var(--color-accent)", flex: "none", width: 14 }}>{ln.prefix}</span>
+              <span style={{ color: ln.color, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {ln.text}
+                {ln.cursor && (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 14,
+                      background: "var(--color-accent)",
+                      marginLeft: 2,
+                      verticalAlign: -2,
+                      animation: "kj-blink 1s steps(1) infinite",
+                    }}
+                  />
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -131,6 +214,7 @@ function App(): React.ReactElement {
             <span style={{ fontSize: 15 }}>Khawarizmi Jefri</span>
           </a>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            {wx.atmosphere && <WeatherChip />}
             <a href="#work">Work</a>
             <a href="#stack">Stack</a>
             <a href="#freelance">Freelance</a>
@@ -146,6 +230,9 @@ function App(): React.ReactElement {
         </div>
       </nav>
 
+      {wx.forecast ? (
+        <ForecastHero openToWork={OPEN_TO_WORK} layout={wx.forecast} terminal={terminal} />
+      ) : (
       <section id="home" style={{ position: "relative", overflow: "hidden" }}>
         <div
           style={{
@@ -242,84 +329,10 @@ function App(): React.ReactElement {
               </div>
             </div>
           </div>
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                position: "absolute",
-                inset: -24,
-                background:
-                  "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 75%)",
-                filter: "blur(10px)",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                position: "relative",
-                background: "var(--color-neutral-900)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-md)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "12px 16px",
-                  borderBottom: "1px solid color-mix(in srgb, var(--color-text) 8%, transparent)",
-                }}
-              >
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-neutral-700)" }} />
-                <span
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 11,
-                    color: "var(--color-neutral-600)",
-                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                  }}
-                >
-                  khawarizmi@dev ~ zsh
-                </span>
-              </div>
-              <div
-                style={{
-                  padding: "18px 20px 22px",
-                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  minHeight: 236,
-                }}
-              >
-                {term.map((ln, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--color-accent)", flex: "none", width: 14 }}>{ln.prefix}</span>
-                    <span style={{ color: ln.color, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {ln.text}
-                      {ln.cursor && (
-                        <span
-                          style={{
-                            display: "inline-block",
-                            width: 8,
-                            height: 14,
-                            background: "var(--color-accent)",
-                            marginLeft: 2,
-                            verticalAlign: -2,
-                            animation: "kj-blink 1s steps(1) infinite",
-                          }}
-                        />
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {terminal}
         </div>
       </section>
+      )}
 
       <section id="work" style={{ padding: "88px 0 32px" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 32px" }}>
