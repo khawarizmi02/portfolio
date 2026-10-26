@@ -8,10 +8,13 @@
 //   E1–E3 Combined – B's atmosphere (behind content) + D's heading fonts + C's forecast hero with the terminal kept,
 //                    in three hero layouts: E1 terminal strip below, E2 card and terminal stacked right,
 //                    E3 headline on top with card + weather-aware terminal side by side below.
+//   E4 = E3 with a 3D KL skyline (Petronas + Menara KL) beside the headline, wearing the same weather.
 // Weather can be simulated with ?wx=clear|cloudy|rain|storm|haze and ?tod=day|night (or the bar / ↑ ↓ keys).
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, createContext, lazy, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CONDITIONS, classify, describeCode, useKLWeather, type Condition, type KLWeather } from "./useKLWeather";
 import { MOODS, MOOD_FONTS_URL, PALETTES, paletteTokens } from "./palettes";
+
+const Skyline = lazy(() => import("./Skyline"));
 
 const VARIANTS = [
   { key: "A", name: "Retint" },
@@ -21,9 +24,10 @@ const VARIANTS = [
   { key: "E1", name: "Combo · terminal strip" },
   { key: "E2", name: "Combo · stacked right" },
   { key: "E3", name: "Combo · headline on top" },
+  { key: "E4", name: "E3 + 3D KL skyline" },
 ] as const;
 type VariantKey = (typeof VARIANTS)[number]["key"];
-type HeroLayout = "C" | "E1" | "E2" | "E3";
+type HeroLayout = "C" | "E1" | "E2" | "E3" | "E4";
 
 type Features = { atmosphere: boolean; forecast: HeroLayout | null; mood: boolean; weatherTerminal: boolean };
 const NONE: Features = { atmosphere: false, forecast: null, mood: false, weatherTerminal: false };
@@ -36,6 +40,7 @@ const FEATURES: Record<VariantKey, Features> = {
   E1: { ...COMBO, forecast: "E1" },
   E2: { ...COMBO, forecast: "E2" },
   E3: { ...COMBO, forecast: "E3", weatherTerminal: true },
+  E4: { ...COMBO, forecast: "E4", weatherTerminal: true },
 };
 // eslint-disable-next-line react-refresh/only-export-components
 export const featuresOf = (v: VariantKey) => FEATURES[v];
@@ -339,6 +344,7 @@ function AtmosphereLayer({ cond, isDay }: { cond: Condition; isDay: boolean }) {
     const scheduleStrike = () => {
       strike = setTimeout(() => {
         setFlash(0.45);
+        window.dispatchEvent(new Event("wx:strike"));
         setTimeout(() => setFlash(0), 90);
         setTimeout(() => setFlash(0.25), 180);
         setTimeout(() => setFlash(0), 280);
@@ -648,6 +654,19 @@ export function ForecastHero({
           </div>
         )}
 
+        {layout === "E4" && (
+          <>
+            <div style={{ ...twoCol, gap: 32 }}>
+              <Pitch openToWork={openToWork} />
+              <SkylineSlot />
+            </div>
+            <div style={{ ...twoCol, gap: 24, alignItems: "stretch" }}>
+              <WeatherCard compact />
+              {terminal}
+            </div>
+          </>
+        )}
+
         {layout === "E3" && (
           <>
             <Pitch openToWork={openToWork} wide />
@@ -659,5 +678,24 @@ export function ForecastHero({
         )}
       </div>
     </section>
+  );
+}
+
+function SkylineSlot() {
+  const { cond, isDay } = useWeatherProto();
+  return (
+    <div
+      style={{
+        height: 480,
+        margin: "-24px -32px -24px 0",
+        // soft vignette so the scene melts into the page instead of sitting in a box
+        maskImage: "radial-gradient(ellipse 62% 58% at 54% 50%, #000 58%, transparent 100%)",
+        WebkitMaskImage: "radial-gradient(ellipse 62% 58% at 54% 50%, #000 58%, transparent 100%)",
+      }}
+    >
+      <Suspense fallback={null}>
+        <Skyline cond={cond} isDay={isDay} />
+      </Suspense>
+    </div>
   );
 }
