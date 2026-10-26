@@ -731,10 +731,9 @@ function App(): React.ReactElement {
           <div
             aria-hidden
             style={{
-              height: fx.contact === "flyover" ? "clamp(340px, 42vw, 520px)" : "clamp(260px, 30vw, 380px)",
-              marginTop: -40,
-              maskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 80%, transparent)",
-              WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 80%, transparent)",
+              height: fx.contact === "flyover" ? "clamp(360px, 42vw, 540px)" : "clamp(320px, 36vw, 460px)",
+              maskImage: "linear-gradient(to bottom, transparent, #000 18%, #000 88%, transparent)",
+              WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 18%, #000 88%, transparent)",
             }}
           >
             <Suspense fallback={null}>

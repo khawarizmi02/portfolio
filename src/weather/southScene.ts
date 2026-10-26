@@ -1,10 +1,30 @@
-// Low-poly KLIA and Sepang for the footer skyline: the KLIA control tower, the terminal's hypar "forest" roof,
-// a runway with a plane taking off, and the Sepang International Circuit grandstand with its leaf canopies
-// and a car lapping the track. Oil palms fill the gaps. Weather, fog and lighting come from Skyline.
+// Low-poly KLIA and Sepang for the footer, seen from a raised three-quarter view.
+//   KLIA   – control tower, the terminal's hypar "forest" roof, contact pier with parked jets, and a runway with
+//            a plane taking off every 16 s
+//   Sepang – the real circuit layout (traced from bacinger/f1-circuits, MIT), the twin straights with the
+//            leaf-canopy grandstand between them, and a car lapping it
+// Oil palms fill the gaps. Weather, fog and lighting come from Skyline.
 import * as THREE from "three";
 
 const flat = (o: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85, ...o });
+
+// Sepang International Circuit centreline in metres (x east, z south), starting on the main straight heading for T1.
+// prettier-ignore
+const SEPANG = [
+  -147,24, -447,49, -461,47, -474,41, -482,32, -487,20, -487,6, -482,-8, -471,-19, -455,-24, -436,-20, -402,-8,
+  -391,-10, -381,-19, -378,-31, -381,-46, -391,-62, -415,-90, -424,-107, -431,-128, -434,-149, -434,-172, -428,-230,
+  -419,-257, -405,-285, -390,-302, -368,-322, -345,-338, -320,-347, -183,-391, -80,-431, -11,-461, 33,-481, 48,-487,
+  60,-487, 70,-481, 73,-468, 92,-362, 104,-308, 121,-241, 133,-216, 146,-198, 169,-179, 192,-167, 215,-161, 237,-160,
+  263,-164, 289,-174, 307,-188, 343,-226, 361,-236, 389,-246, 412,-247, 436,-244, 455,-236, 472,-223, 673,6, 674,17,
+  670,30, 635,107, 625,114, 613,117, 429,127, 256,147, 161,163, 152,170, 149,182, 157,196, 224,233, 239,248, 250,270,
+  255,292, 254,325, 250,352, 243,379, 227,413, 203,448, 190,456, 177,458, 163,455, 152,448, -60,275, -75,270, -94,269,
+  -114,274, -192,313, -212,319, -237,323, -258,322, -298,315, -325,304, -343,290, -367,259, -375,236, -376,222,
+  -366,206, -345,197, 493,44, 505,34, 514,13, 510,-3, 494,-19, 469,-23,
+];
+const TRACK_SCALE = 0.0078;
+const TRACK_AT = new THREE.Vector3(5.1, 0, -1.7);
+const trackPoint = (x: number, z: number) => new THREE.Vector3(x * TRACK_SCALE, 0, z * TRACK_SCALE).add(TRACK_AT);
 
 // KLIA tower: slender shaft that flares into a torch-like cab, then a mast.
 function klTower(concrete: THREE.Material, glass: THREE.Material, tip: THREE.Material) {
@@ -30,7 +50,6 @@ function klTower(concrete: THREE.Material, glass: THREE.Material, tip: THREE.Mat
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, 1.1, 5), tip);
   mast.position.y = 5.79 + 0.55;
   g.add(cab, top, mast);
-  g.userData.tip = new THREE.Vector3(0, 6.9, 0);
   return g;
 }
 
@@ -66,6 +85,26 @@ function leafGeo() {
   return g;
 }
 
+// Flat rounded rectangle on the ground, x0..x1 by zMin..zMax, facing up.
+function roundedRect(x0: number, zMin: number, x1: number, zMax: number, r: number) {
+  // drawn in shape space where y = -z, so rotating -90° about x lays it flat with the face up
+  const z0 = -zMax,
+    z1 = -zMin;
+  const s = new THREE.Shape();
+  s.moveTo(x0 + r, z0);
+  s.lineTo(x1 - r, z0);
+  s.quadraticCurveTo(x1, z0, x1, z0 + r);
+  s.lineTo(x1, z1 - r);
+  s.quadraticCurveTo(x1, z1, x1 - r, z1);
+  s.lineTo(x0 + r, z1);
+  s.quadraticCurveTo(x0, z1, x0, z1 - r);
+  s.lineTo(x0, z0 + r);
+  s.quadraticCurveTo(x0, z0, x0 + r, z0);
+  const g = new THREE.ShapeGeometry(s);
+  g.rotateX(-Math.PI / 2);
+  return g;
+}
+
 function palm(trunk: THREE.Material, leaf: THREE.Material, rnd: () => number) {
   const g = new THREE.Group();
   const h = 0.8 + rnd() * 0.6;
@@ -86,7 +125,7 @@ function palm(trunk: THREE.Material, leaf: THREE.Material, rnd: () => number) {
 }
 
 // Flat strip that follows a curve, for the circuit and its edge lines.
-function ribbon(curve: THREE.Curve<THREE.Vector3>, width: number, y: number, n = 240) {
+function ribbon(curve: THREE.Curve<THREE.Vector3>, width: number, y: number, n = 600) {
   const pos: number[] = [];
   const edge = (u: number) => {
     const p = curve.getPointAt(u % 1),
@@ -124,12 +163,37 @@ function plane(body: THREE.Material, accent: THREE.Material) {
 
 function car(body: THREE.Material, dark: THREE.Material) {
   const g = new THREE.Group();
-  const b = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.045, 0.1), body);
-  b.position.y = 0.04;
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.12), dark);
-  wing.position.set(-0.12, 0.08, 0);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.08), body);
+  b.position.y = 0.035;
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.035, 0.1), dark);
+  wing.position.set(-0.09, 0.07, 0);
   g.add(b, wing);
   return g;
+}
+
+// Place name floating over each landmark, redrawn in the current text colour.
+function label(text: string) {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 128;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, fog: false }));
+  sp.scale.set(2.8, 0.7, 1);
+  sp.renderOrder = 10;
+  const draw = (ink: string, line: string) => {
+    const x = c.getContext("2d")!;
+    x.clearRect(0, 0, 512, 128);
+    x.font = "600 54px 'DM Sans', system-ui, sans-serif";
+    x.textAlign = "center";
+    x.letterSpacing = "10px";
+    x.fillStyle = ink;
+    x.fillText(text, 256, 72);
+    x.fillStyle = line;
+    x.fillRect(244, 96, 24, 4);
+    tex.needsUpdate = true;
+  };
+  return { sp, draw };
 }
 
 export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite) {
@@ -142,6 +206,8 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
   const tipMat = flat();
   const asphalt = new THREE.MeshStandardMaterial({ roughness: 1 });
   const paint = new THREE.MeshBasicMaterial();
+  const apron = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const grass = new THREE.MeshStandardMaterial({ roughness: 1 });
   const trunk = flat();
   const leaf = flat({ roughness: 0.9 });
   const planeMat = flat({ roughness: 0.4 });
@@ -152,49 +218,66 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
   const glows: THREE.Sprite[] = [];
 
   /* ── KLIA ── */
+  const apronMesh = new THREE.Mesh(roundedRect(-11.4, -5.6, -0.4, 2.4, 0.6), apron);
+  apronMesh.position.y = 0.004;
+  group.add(apronMesh);
+
   const tower = klTower(concrete, glass, tipMat);
-  tower.position.set(-0.6, 0, -3.4);
+  tower.scale.setScalar(0.52);
+  tower.position.set(-1.5, 0, -2.4);
+  tower.userData.tip = new THREE.Vector3(0, 6.9 * 0.52, 0);
   group.add(tower);
-  const cabGlow = glow(new THREE.Color("#e6f0ff"), 1.4);
-  cabGlow.position.set(-0.6, 5.2, -3.3);
-  const beacon = glow(new THREE.Color("#ff6b5a"), 0.7);
-  beacon.position.set(-0.6, 6.9, -3.4);
+  const cabGlow = glow(new THREE.Color("#e6f0ff"), 1.1);
+  cabGlow.position.set(-1.5, 2.69, -2.3);
+  const beacon = glow(new THREE.Color("#ff6b5a"), 0.6);
+  beacon.position.set(-1.5, 3.59, -2.4);
   glows.push(cabGlow, beacon);
 
   const terminal = new THREE.Group();
-  const M = 1.05;
-  const hypar = hyparGeo(M, 0.14);
-  const column = new THREE.CylinderGeometry(0.03, 0.05, 0.95, 5);
+  const M = 0.85;
+  const hypar = hyparGeo(M, 0.12);
+  const column = new THREE.CylinderGeometry(0.025, 0.04, 0.75, 5);
   for (let i = 0; i < 6; i++)
-    for (let j = 0; j < 2; j++) {
-      const x = i * M,
-        z = j * M;
+    for (let j = 0; j < 3; j++) {
       const shell = new THREE.Mesh(hypar, roof);
-      shell.position.set(x, 1.0, z);
+      shell.position.set(i * M, 0.8, j * M);
       const col = new THREE.Mesh(column, concrete);
-      col.position.set(x, 0.48, z);
+      col.position.set(i * M, 0.38, j * M);
       terminal.add(shell, col);
     }
-  const hall = new THREE.Mesh(new THREE.BoxGeometry(6 * M - 0.3, 0.7, 2 * M - 0.3), glass);
-  hall.position.set(2.5 * M, 0.35, 0.5 * M);
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(6 * M - 0.25, 0.55, 3 * M - 0.25), glass);
+  hall.position.set(2.5 * M, 0.28, M);
   terminal.add(hall);
-  terminal.position.set(-8.4, 0, -4.4);
-  terminal.scale.setScalar(1.3);
+  terminal.position.set(-8.6, 0, -5);
   group.add(terminal);
 
-  const runway = new THREE.Mesh(new THREE.BoxGeometry(12, 0.02, 0.9), asphalt);
-  runway.position.set(-5, 0.01, 1.8);
+  // contact pier in front of the terminal, with jets parked nose-in
+  const pier = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.32, 0.42), glass);
+  pier.position.set(-6.4, 0.16, -1.2);
+  const link = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.28, 1.2), glass);
+  link.position.set(-6.4, 0.14, -2.0);
+  group.add(pier, link);
+  [-8.4, -6.9, -5.4, -3.9].forEach((x) => {
+    const p = plane(planeMat, accentMat);
+    p.scale.setScalar(0.75);
+    p.rotation.y = Math.PI / 2; // nose toward the pier
+    p.position.set(x, 0.1, -0.35);
+    group.add(p);
+  });
+
+  const runway = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.02, 0.7), asphalt);
+  runway.position.set(-5.9, 0.012, 1.5);
   group.add(runway);
   const dash = new THREE.BoxGeometry(0.35, 0.005, 0.04);
-  for (let x = -10.6; x < 0.6; x += 0.7) {
+  for (let x = -11.3; x < -0.4; x += 0.7) {
     const d = new THREE.Mesh(dash, paint);
-    d.position.set(x, 0.025, 1.8);
+    d.position.set(x, 0.026, 1.5);
     group.add(d);
   }
   const runwayLights = new THREE.Group();
   const bulb = new THREE.SphereGeometry(0.03, 4, 3);
-  for (let x = -10.8; x < 1; x += 0.6)
-    [1.36, 2.24].forEach((z) => {
+  for (let x = -11.5; x < -0.2; x += 0.55)
+    [1.13, 1.87].forEach((z) => {
       const b = new THREE.Mesh(bulb, lightMat);
       b.position.set(x, 0.04, z);
       runwayLights.add(b);
@@ -209,87 +292,96 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
   group.add(jet);
 
   /* ── Sepang ── */
-  const sepang = new THREE.Group();
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i < SEPANG.length; i += 2) pts.push(trackPoint(SEPANG[i], SEPANG[i + 1]));
+  const track = new THREE.CatmullRomCurve3(pts, true, "centripetal");
+  const box = new THREE.Box3().setFromPoints(pts);
+  const grassMesh = new THREE.Mesh(
+    roundedRect(box.min.x - 0.5, box.min.z - 0.5, box.max.x + 0.5, box.max.z + 0.5, 0.8),
+    grass,
+  );
+  grassMesh.position.y = 0.004;
+  group.add(grassMesh);
+  group.add(new THREE.Mesh(ribbon(track, 0.26, 0.01), paint)); // white edge lines peek out either side
+  group.add(new THREE.Mesh(ribbon(track, 0.2, 0.014), asphalt));
+  const startLine = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.004, 0.22), paint);
+  startLine.position.copy(trackPoint(-147, 24)).setY(0.018);
+  group.add(startLine);
+
+  // main grandstand, between the main straight and the back straight
+  const grand = new THREE.Group();
   const standShape = new THREE.Shape();
   standShape.moveTo(0, 0);
-  standShape.lineTo(1.2, 0);
-  standShape.lineTo(1.2, 1.25);
-  standShape.lineTo(0, 0.25);
-  const stand = new THREE.ExtrudeGeometry(standShape, { depth: 6, bevelEnabled: false });
+  standShape.lineTo(0.6, 0);
+  standShape.lineTo(0.6, 0.55);
+  standShape.lineTo(0, 0.08);
+  const stand = new THREE.ExtrudeGeometry(standShape, { depth: 2.6, bevelEnabled: false });
   stand.rotateY(Math.PI / 2);
-  stand.translate(-3, 0, 0);
-  sepang.add(new THREE.Mesh(stand, concrete));
-  const back = new THREE.Mesh(new THREE.BoxGeometry(6.2, 1.5, 0.4), glass);
-  back.position.set(0, 0.75, -1.4);
-  sepang.add(back);
+  stand.translate(-1.3, 0, 0.3);
+  grand.add(new THREE.Mesh(stand, concrete));
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.62, 0.12), glass);
+  back.position.set(0, 0.31, -0.36);
+  grand.add(back);
   const leafG = leafGeo();
+  leafG.scale(0.46, 0.46, 0.46);
   for (let i = 0; i < 8; i++) {
+    const x = -1.15 + i * 0.33;
     const l = new THREE.Mesh(leafG, roof);
-    l.position.set(-2.62 + i * 0.75, 1.75, -0.45);
+    l.position.set(x, 0.95, 0.02);
     l.rotation.y = (i % 2 ? 1 : -1) * 0.22;
-    sepang.add(l);
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 1.9, 4), concrete);
-    mast.position.set(-2.62 + i * 0.75, 0.95, -1.15);
-    sepang.add(mast);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.98, 4), concrete);
+    mast.position.set(x, 0.49, -0.3);
+    grand.add(l, mast);
   }
-  sepang.position.set(4.6, 0, -3.3);
-  sepang.scale.setScalar(1.4);
-  sepang.userData.tip = new THREE.Vector3(0, 2.7, -1.5);
-  group.add(sepang);
-  [-2.4, 0, 2.4].forEach((x) => {
-    const f = glow(new THREE.Color("#fff3d6"), 1.1);
-    f.position.set(4.6 + x, 3, -5);
+  grand.position.copy(trackPoint(-150, 92));
+  grand.rotation.y = Math.PI + 0.08; // seats face the main straight
+  grand.userData.tip = new THREE.Vector3(0, 1.1, 0);
+  group.add(grand);
+  grand.updateMatrixWorld();
+  [-0.9, 0, 0.9].forEach((x) => {
+    const f = glow(new THREE.Color("#fff3d6"), 0.7);
+    f.position.copy(grand.localToWorld(new THREE.Vector3(x, 1.3, -0.3)));
     glows.push(f);
   });
 
-  const track = new THREE.CatmullRomCurve3(
-    [
-      [1.6, -2.4],
-      [4.6, -2.45],
-      [7.6, -2.4],
-      [9.0, -1.7],
-      [8.7, -0.4],
-      [7.1, 0.2],
-      [5.5, -0.7],
-      [4.2, 0.4],
-      [2.6, 0.9],
-      [1.0, 0.3],
-      [0.6, -1.3],
-    ].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-    true,
-    "centripetal",
-  );
-  group.add(new THREE.Mesh(ribbon(track, 0.36, 0.012), asphalt));
-  const lines = new THREE.Mesh(ribbon(track, 0.42, 0.008), paint);
-  group.add(lines);
   const racer = car(accentMat, concrete);
-  const tailLight = glow(new THREE.Color("#ff4d4d"), 0.35);
+  const tailLight = glow(new THREE.Color("#ff4d4d"), 0.3);
   racer.add(tailLight);
-  tailLight.position.set(-0.14, 0.06, 0);
+  tailLight.position.set(-0.11, 0.05, 0);
   glows.push(tailLight);
   group.add(racer);
 
+  /* ── labels ── */
+  const klia = label("KLIA");
+  klia.sp.position.set(-5.6, 2.5, -3.2);
+  const sepang = label("SEPANG");
+  sepang.sp.position.set(box.getCenter(new THREE.Vector3()).x, 2.1, box.min.z + 0.6);
+  group.add(klia.sp, sepang.sp);
+
   /* ── oil palms: a plantation behind everything, and clumps at the far edges ── */
-  for (let i = 0; i < 90; i++) {
-    const x = (rnd() - 0.5) * 26,
-      z = -9.5 + rnd() * 12.5;
-    if (z > -6 && Math.abs(x) < 9.8) continue;
+  for (let i = 0; i < 140; i++) {
+    const x = (rnd() - 0.5) * 30,
+      z = -11 + rnd() * 14;
+    if (z > -6.4 && Math.abs(x) < 11.4) continue;
     const p = palm(trunk, leaf, rnd);
     p.position.set(x, 0, z);
     group.add(p);
   }
 
   const retheme = (bg: THREE.Color, text: THREE.Color, accent: THREE.Color, day: boolean, k: number) => {
-    concrete.color.copy(bg.clone().lerp(text, 0.32 * k));
-    roof.color.copy(bg.clone().lerp(text, Math.min(0.62 * k, 0.85)));
+    const hex = (c: THREE.Color) => `#${c.getHexString()}`;
+    concrete.color.copy(bg.clone().lerp(text, 0.36 * k));
+    roof.color.copy(bg.clone().lerp(text, Math.min(0.7 * k, 0.88)));
     glass.color.copy(bg.clone().lerp(text, 0.45 * k).lerp(new THREE.Color("#8fb4d8"), 0.25));
     glass.emissive.set("#ffd9a0");
     glass.emissiveIntensity = day ? 0 : 0.45;
     tipMat.color.copy(accent);
     tipMat.emissive.copy(accent);
     tipMat.emissiveIntensity = day ? 0.15 : 1.2;
-    asphalt.color.copy(bg.clone().lerp(new THREE.Color(0x000000), 0.35).lerp(text, 0.1));
-    paint.color.copy(bg.clone().lerp(text, 0.7));
+    asphalt.color.copy(bg.clone().lerp(new THREE.Color(0x000000), 0.55).lerp(text, 0.06));
+    paint.color.copy(new THREE.Color(0xffffff).lerp(bg, day ? 0.05 : 0.3));
+    apron.color.copy(bg.clone().lerp(text, 0.14 * k));
+    grass.color.copy(bg.clone().lerp(new THREE.Color("#4f8f4f"), day ? 0.4 : 0.22));
     trunk.color.copy(bg.clone().lerp(new THREE.Color("#6b5641"), 0.55));
     leaf.color.copy(bg.clone().lerp(new THREE.Color("#3f7a4a"), day ? 0.65 : 0.4));
     planeMat.color.copy(bg.clone().lerp(new THREE.Color(0xffffff), 0.8));
@@ -297,25 +389,27 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
     accentMat.emissive.copy(accent);
     accentMat.emissiveIntensity = day ? 0 : 0.4;
     runwayLights.visible = !day;
+    klia.draw(hex(text), hex(accent));
+    sepang.draw(hex(text), hex(accent));
   };
 
-  // plane: rolls down the runway, rotates and climbs away into the clouds, then the next one lines up
+  // plane: rolls down the runway, rotates and climbs away over the circuit, then the next one lines up
   const animate = (t: number) => {
     const p = (t % 16) / 16;
     if (p < 0.45) {
       const q = p / 0.45;
-      jet.position.set(-10 + 7.5 * q * q, 0.14, 1.8);
+      jet.position.set(-11 + 8.5 * q * q, 0.12, 1.5);
       jet.rotation.z = 0;
     } else {
       const q = (p - 0.45) / 0.55;
-      jet.position.set(-2.5 + q * 12, 0.14 + q * q * 6.5, 1.8 - q * 1.5);
+      jet.position.set(-2.5 + q * 13, 0.12 + q * q * 5.5, 1.5 - q * 2);
       jet.rotation.z = Math.min(0.28, q * 1.4);
     }
-    const u = (t * 0.045) % 1;
-    racer.position.copy(track.getPointAt(u)).setY(0.015);
+    const u = (t * 0.035) % 1;
+    racer.position.copy(track.getPointAt(u)).setY(0.016);
     const tan = track.getTangentAt(u);
     racer.rotation.y = Math.atan2(-tan.z, tan.x);
   };
 
-  return { group, glows, targets: [tower, sepang], retheme, animate };
+  return { group, glows, targets: [tower, grand], retheme, animate };
 }

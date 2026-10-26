@@ -319,7 +319,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       b.position.set(x, h / 2, z);
       scene.add(b);
     }
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), groundMat);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 64), groundMat);
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
@@ -424,7 +424,8 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
         text = cssColor("--color-text"),
         accent = cssColor("--color-accent");
       (scene.fog as THREE.FogExp2).color.copy(c === "haze" ? bg.clone().lerp(new THREE.Color("#9c7a48"), 0.12) : bg);
-      (scene.fog as THREE.FogExp2).density = state.fog;
+      // the footer scene is seen from further away, so it gets thinner fog to stay legible
+      (scene.fog as THREE.FogExp2).density = state.fog * (south ? 0.45 : 1);
       hemi.color.copy(bg.clone().lerp(new THREE.Color(0xffffff), 0.6));
       hemi.groundColor.copy(bg);
       hemi.intensity = state.hemi;
@@ -514,8 +515,8 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
         camera.position.set(4.2 + camX * 0.5, 4 + camY * 0.4, 11.8);
         camera.lookAt(-1.6, 3.4, -1);
       } else {
-        // wide strips: keep ~22 units of city across whatever the aspect is
-        const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(11 / (16 * camera.aspect))), 18, 40);
+        // wide strips: keep ~24 units of KLIA + Sepang across whatever the aspect is
+        const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(12 / (18 * camera.aspect))), 18, 44);
         if (Math.abs(camera.fov - fov) > 0.1) {
           camera.fov = fov;
           camera.updateProjectionMatrix();
@@ -524,8 +525,9 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
         const r = el.getBoundingClientRect();
         const f = view === "flyover" && !reduce ? 1 - Math.min(1, Math.max(0, (window.innerHeight - r.top) / r.height)) : 0;
         const k = f * f * (3 - 2 * f);
-        camera.position.set(camX * 1.4, THREE.MathUtils.lerp(3.8, 15, k) + camY * 0.4, THREE.MathUtils.lerp(16, 12, k));
-        camera.lookAt(0.2, THREE.MathUtils.lerp(1.9, 0, k), THREE.MathUtils.lerp(-1.5, -2.5, k));
+        // raised three-quarter view: high enough to read the circuit and the terminal roof
+        camera.position.set(camX * 1.2, THREE.MathUtils.lerp(8.5, 17, k) + camY * 0.4, THREE.MathUtils.lerp(15, 9, k));
+        camera.lookAt(0, 0, THREE.MathUtils.lerp(-1.6, -2, k));
       }
 
       south?.animate(reduce ? 4 : t);
