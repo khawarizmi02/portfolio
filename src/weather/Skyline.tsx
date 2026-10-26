@@ -1,4 +1,4 @@
-// Low-poly 3D Kuala Lumpur skyline (Merdeka 118, Petronas Twin Towers, Menara KL) that wears the current weather.
+// Low-poly 3D Kuala Lumpur skyline (Merdeka 118, Petronas Twin Towers, Menara KL, Sultan Abdul Samad) that wears the current weather.
 // Colours come from the live palette tokens on :root, so it always matches the page.
 // Loaded lazily so three.js stays out of the main bundle.
 import { useEffect, useRef } from "react";
@@ -94,22 +94,35 @@ function menaraKL(mat: THREE.Material, shaftMat: THREE.Material, podMat: THREE.M
   return g;
 }
 
-// Merdeka 118: faceted glass tower. Each ring is rotated half a step from the last, so the faces fold into
-// the diamond facets of its songket-inspired skin. Tapers into a crown and a long spire.
+// Merdeka 118: a slim glass shaft of three stacked segments. Alternate rings are rotated half a step and
+// pushed in or out, so every segment is a band of big triangular facets (the songket diamonds) and the
+// silhouette kinks slightly where they meet. The roof is cut on a slant and the spire rises off its high edge.
 function merdeka118(glassMat: THREE.Material, tipMat: THREE.Material) {
   const g = new THREE.Group();
-  const S = 8,
-    RINGS = 14,
+  const S = 6,
     H = 6.2;
-  const radius = (t: number) => 0.62 - 0.36 * t ** 1.5 - (t > 0.9 ? (t - 0.9) * 1.6 : 0);
-  const ring = (k: number) =>
-    Array.from({ length: S }, (_, i) => {
-      const t = k / RINGS;
-      const a = ((i + (k % 2) * 0.5) / S) * Math.PI * 2;
-      return new THREE.Vector3(Math.cos(a) * radius(t), t * H, Math.sin(a) * radius(t));
+  // [height fraction, radius, sideways drift]
+  const rings = [
+    [0, 0.6, 0],
+    [0.34, 0.64, -0.03],
+    [0.64, 0.56, 0.03],
+    [0.88, 0.58, -0.02],
+  ];
+  const SLANT = 0.55; // how much higher the roof is at its -x edge
+  const ring = (k: number) => {
+    const [t, r, dx] = rings[k];
+    return Array.from({ length: S }, (_, i) => {
+      const a = ((i + (k % 2) * 0.5) / S) * Math.PI * 2 + Math.PI;
+      const x = Math.cos(a) * r,
+        z = Math.sin(a) * r * 0.85;
+      // the top ring follows the slanted roof
+      const y = k === rings.length - 1 ? t * H + ((-x / r + 1) / 2) * SLANT : t * H;
+      return new THREE.Vector3(x + dx, y, z);
     });
+  };
   const pos: number[] = [];
-  for (let k = 0; k < RINGS; k++) {
+  const push = (...vs: THREE.Vector3[]) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
+  for (let k = 0; k < rings.length - 1; k++) {
     const A = ring(k),
       B = ring(k + 1);
     for (let i = 0; i < S; i++) {
@@ -117,21 +130,135 @@ function merdeka118(glassMat: THREE.Material, tipMat: THREE.Material) {
         a1 = A[(i + 1) % S],
         b0 = B[i],
         b1 = B[(i + 1) % S];
-      // odd rings are shifted forward, even rings back: pick the diagonal that follows the shift
-      const tris = k % 2 === 0 ? [a0, b0, a1, a1, b0, b1] : [a0, b0, b1, a0, b1, a1];
-      tris.forEach((v) => pos.push(v.x, v.y, v.z));
+      // even rings sit half a step behind the next: pick the diagonal that follows the shift
+      if (k % 2 === 0) push(a0, b0, a1, a1, b0, b1);
+      else push(a0, b0, b1, a0, b1, a1);
     }
   }
+  // slanted roof: fan from the centre of the top ring
+  const top = ring(rings.length - 1);
+  const c = top.reduce((m, v) => m.add(v), new THREE.Vector3()).divideScalar(S);
+  for (let i = 0; i < S; i++) push(c, top[(i + 1) % S], top[i]);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
   const body = new THREE.Mesh(geo, glassMat);
   (body.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
   g.add(body);
-  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.07, 2.6, 6), tipMat);
-  spire.position.y = H + 1.3;
+  // spire: a thin faceted needle continuing the high edge of the roof
+  const high = top.reduce((m, v) => (v.y > m.y ? v : m));
+  const base = high.clone().lerp(c, 0.35);
+  const SPIRE = 1.9;
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(0.06, SPIRE, 4), tipMat);
+  spire.position.set(base.x, base.y + SPIRE / 2 - 0.05, base.z);
   g.add(spire);
-  g.userData.tip = new THREE.Vector3(0, H + 2.6, 0);
+  g.userData.tip = new THREE.Vector3(base.x, base.y + SPIRE, base.z);
+  g.userData.crown = base;
+  return g;
+}
+
+// Sultan Abdul Samad Building on Dataran Merdeka: a long arcaded block under a red tile roof, the clock
+// tower in the middle and an onion-domed tower at each end. Not to scale; it sits in the foreground.
+function archTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 64;
+  const x = c.getContext("2d")!;
+  x.fillStyle = "#fff";
+  x.fillRect(0, 0, 256, 64);
+  x.fillStyle = "#3a3a3a";
+  // two storeys of horseshoe arches
+  for (const [y0, h] of [
+    [8, 20],
+    [38, 22],
+  ])
+    for (let i = 0; i < 16; i++) {
+      const cx = 8 + i * 16;
+      x.beginPath();
+      x.moveTo(cx - 5, y0 + h);
+      x.lineTo(cx - 5, y0 + 5);
+      x.arc(cx, y0 + 5, 5, Math.PI, 0);
+      x.lineTo(cx + 5, y0 + h);
+      x.fill();
+    }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+
+function onionDome(r: number, mat: THREE.Material, tipMat: THREE.Material) {
+  const g = new THREE.Group();
+  const profile = [
+    [r * 0.95, 0],
+    [r * 1.05, r * 0.25],
+    [r * 0.95, r * 0.6],
+    [r * 0.6, r * 0.95],
+    [r * 0.2, r * 1.2],
+    [0.001, r * 1.3],
+  ].map(([px, py]) => new THREE.Vector2(px, py));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(profile, 10), mat));
+  const finial = new THREE.Mesh(new THREE.ConeGeometry(r * 0.12, r * 0.8, 5), tipMat);
+  finial.position.y = r * 1.6;
+  g.add(finial);
+  return g;
+}
+
+function sultanAbdulSamad(
+  wallMat: THREE.Material,
+  facadeMat: THREE.Material,
+  roofMat: THREE.Material,
+  domeMat: THREE.Material,
+  tipMat: THREE.Material,
+) {
+  const g = new THREE.Group();
+  const L = 3.6,
+    D = 0.7,
+    WH = 0.6;
+  // facade texture on the front face only (+z is index 4 of a box's material array)
+  const block = new THREE.Mesh(new THREE.BoxGeometry(L, WH, D), [
+    wallMat,
+    wallMat,
+    wallMat,
+    wallMat,
+    facadeMat,
+    wallMat,
+  ]);
+  block.position.y = WH / 2;
+  // hipped tile roof: a box tapered in towards the ridge
+  const roofGeo = new THREE.CylinderGeometry(Math.SQRT1_2, 1, 1, 4, 1);
+  roofGeo.rotateY(Math.PI / 4);
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.scale.set((L * 0.98) / Math.SQRT2, 0.16, (D * 0.95) / Math.SQRT2);
+  roof.position.y = WH + 0.08;
+  g.add(block, roof);
+
+  // clock tower: square shaft, belfry, clock drum, dome
+  const tower = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.35, 0.4), wallMat);
+  shaft.position.y = 0.675;
+  const belfry = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.34), facadeMat);
+  belfry.position.y = 1.51;
+  const clock = new THREE.Mesh(new THREE.CircleGeometry(0.09, 12), tipMat);
+  clock.position.set(0, 1.12, 0.201);
+  const dome = onionDome(0.19, domeMat, tipMat);
+  dome.position.y = 1.67;
+  tower.add(shaft, belfry, clock, dome);
+  tower.position.z = D / 2 - 0.12;
+  g.add(tower);
+
+  // end towers
+  for (const s of [-1, 1]) {
+    const t = new THREE.Group();
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.95, 8), wallMat);
+    drum.position.y = 0.475;
+    const d = onionDome(0.22, domeMat, tipMat);
+    d.position.y = 0.95;
+    t.add(drum, d);
+    t.position.set(s * (L / 2 - 0.1), 0, D / 2 - 0.15);
+    g.add(t);
+  }
+  g.userData.tip = new THREE.Vector3(0, 2.15, tower.position.z);
   return g;
 }
 
@@ -284,10 +411,26 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     const glassMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.25, metalness: 0.55 });
     const merdeka = merdeka118(glassMat, tipMat);
     merdeka.position.set(-3.3, 0, -5);
+    const sasWallMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 });
+    const arches = archTexture();
+    arches.repeat.x = 2;
+    const sasFacadeMat = new THREE.MeshStandardMaterial({
+      flatShading: true,
+      roughness: 0.9,
+      map: arches,
+      emissive: 0xffffff,
+      emissiveMap: arches,
+      emissiveIntensity: 0,
+    });
+    const sasRoofMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8 });
+    const sasDomeMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.45, metalness: 0.5 });
+    const sas = sultanAbdulSamad(sasWallMat, sasFacadeMat, sasRoofMat, sasDomeMat, tipMat);
+    sas.position.set(-0.6, 0, 2.9);
+    sas.rotation.y = 0.12;
     // the footer views trade the city centre for KLIA and Sepang
     const south = view === "panorama" || view === "flyover" ? buildSouth(glowSprite) : null;
     if (south) scene.add(south.group);
-    else scene.add(klcc, menara, merdeka);
+    else scene.add(klcc, menara, merdeka, sas);
 
     // night glows at the crowns
     const glows = [
@@ -295,11 +438,15 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       glowSprite(new THREE.Color("#e6eeff"), 1.6),
       glowSprite(new THREE.Color("#b9c6ff"), 1.5),
       glowSprite(new THREE.Color("#cfe2ff"), 1.4),
+      glowSprite(new THREE.Color("#ffd9a0"), 1.2),
     ];
     glows[0].position.set(-0.85, 4.9, 0.1);
     glows[1].position.set(0.85, 4.9, 0.1);
     glows[2].position.set(3.6, 4.15, -2.1);
-    glows[3].position.set(-3.3, 6.4, -4.9);
+    merdeka.updateMatrixWorld();
+    sas.updateMatrixWorld();
+    glows[3].position.copy(merdeka.localToWorld(merdeka.userData.crown.clone()));
+    glows[4].position.copy(sas.localToWorld(new THREE.Vector3(0, 1.9, 0.3)));
     if (south) glows.splice(0, glows.length, ...south.glows);
     // dev only: sliders for the hand-placed pieces of the footer scene (lil-gui loads on demand)
     let gui: { destroy(): void } | null = null;
@@ -327,6 +474,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       if (Math.abs(x) < 1.7 && z > -1.5) continue; // keep KLCC clear
       if (Math.hypot(x + 3.3, z + 5) < 1.1) continue; // and Merdeka 118
       if (Math.hypot(x - 3.6, z + 2.2) < 1.3) continue; // and the hill
+      if (Math.abs(x + 0.6) < 2.6 && z > 1.6) continue; // and Dataran Merdeka
       const h = 0.3 + rnd() ** 2 * 2.4;
       const b = new THREE.Mesh(box, fillerMat);
       b.scale.set(0.3 + rnd() * 0.6, h, 0.3 + rnd() * 0.6);
@@ -416,7 +564,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     let boltUntil = 0;
     const strike = () => {
       const r = rnd();
-      const target = south ? south.targets[r < 0.6 ? 0 : 1] : r < 0.4 ? merdeka : r < 0.7 ? twinR : menara;
+      const target = south ? south.targets[r < 0.6 ? 0 : 1] : r < 0.4 ? merdeka : r < 0.65 ? twinR : r < 0.9 ? menara : sas;
       const tip = target.localToWorld(target.userData.tip.clone());
       const pts: THREE.Vector3[] = [];
       for (let k = 0, y = 9.5; y > tip.y; k++, y -= 0.45 + rnd() * 0.35)
@@ -469,6 +617,17 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       klPodMat.emissiveIntensity = day ? 0 : 1.1;
       glassMat.emissive.set("#a9c8f0");
       glassMat.emissiveIntensity = day ? 0 : 0.3;
+      // Sultan Abdul Samad: brick and cream walls, red tiles, copper domes; floodlit warm at night
+      sasWallMat.color.copy(bg.clone().lerp(text, 0.3 * k).lerp(new THREE.Color("#c98b5f"), 0.35));
+      sasFacadeMat.color.copy(bg.clone().lerp(text, 0.4 * k).lerp(new THREE.Color("#e2c9a6"), 0.4));
+      sasRoofMat.color.copy(bg.clone().lerp(text, 0.25 * k).lerp(new THREE.Color("#a8432e"), 0.5));
+      sasDomeMat.color.copy(bg.clone().lerp(text, 0.3 * k).lerp(new THREE.Color("#b5653c"), 0.6));
+      sasFacadeMat.emissive.set("#ffcf8f");
+      sasFacadeMat.emissiveIntensity = day ? 0 : 0.35;
+      sasWallMat.emissive.set("#ffb874");
+      sasWallMat.emissiveIntensity = day ? 0 : 0.2;
+      sasDomeMat.emissive.set("#ff9a5a");
+      sasDomeMat.emissiveIntensity = day ? 0 : 0.35;
       glows.forEach((g) => (g.visible = !day));
       south?.retheme(bg, text, accent, day, k);
       groundMat.color.copy(bg.clone().lerp(text, 0.08));
