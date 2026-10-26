@@ -1,5 +1,5 @@
 // 3D effects built from CSS transforms only: no WebGL, crisp text, nearly free to render.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LAYERS, type LayerKey } from "./layers";
 import "./css3d.css";
 
@@ -127,6 +127,56 @@ export function DepthPortrait({
             <i className={`ph ${c.icon}`} />
             {c.text}
           </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── About C: a card that flips between two faces on its own, or when you pick a side ── */
+export function FlipCard({
+  front,
+  back,
+  labels,
+  every = 7000,
+}: {
+  front: React.ReactNode;
+  back: React.ReactNode;
+  labels: [string, string];
+  every?: number;
+}) {
+  const [flipped, setFlipped] = useState(false);
+  const [paused, setPaused] = useState(false);
+  // a fresh timer after every flip, so picking a side yourself always gets the full interval
+  useEffect(() => {
+    if (paused || reduceMotion()) return;
+    const id = setTimeout(() => setFlipped((f) => !f), every);
+    return () => clearTimeout(id);
+  }, [flipped, paused, every]);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <div
+        className="kj-flip"
+        data-flipped={flipped ? "" : undefined}
+        onPointerEnter={() => setPaused(true)}
+        onPointerLeave={() => setPaused(false)}
+        onClick={() => setFlipped((f) => !f)}
+        style={{ width: "100%" }}
+      >
+        <div className="kj-flip-inner">
+          <div className="kj-flip-face" aria-hidden={flipped}>
+            {front}
+          </div>
+          <div className="kj-flip-face kj-flip-back" aria-hidden={!flipped}>
+            {back}
+          </div>
+        </div>
+      </div>
+      <div className="kj-flip-switch" role="group" aria-label="Choose view">
+        {labels.map((l, i) => (
+          <button key={l} aria-pressed={flipped === (i === 1)} onClick={() => setFlipped(i === 1)}>
+            {l}
+          </button>
         ))}
       </div>
     </div>

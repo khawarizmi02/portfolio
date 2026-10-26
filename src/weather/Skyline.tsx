@@ -4,10 +4,11 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { Condition } from "./useKLWeather";
+import { buildSouth } from "./southScene";
 
 // hero      – the original framing beside the headline
-// panorama  – wide, low strip for the footer
-// flyover   – footer strip whose camera descends from an aerial view to street level as you reach the bottom
+// panorama  – wide, low strip for the footer, showing KLIA and Sepang instead of the city centre
+// flyover   – the same strip, but the camera descends from an aerial view as you reach the bottom
 // rooftop   – a figure on a rooftop in the foreground, looking out at the city (About). Drop a model at
 //             public/me.glb and it replaces the placeholder figure.
 export type SkylineView = "hero" | "panorama" | "flyover" | "rooftop";
@@ -283,7 +284,10 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     const glassMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.25, metalness: 0.55 });
     const merdeka = merdeka118(glassMat, tipMat);
     merdeka.position.set(-3.3, 0, -5);
-    scene.add(klcc, menara, merdeka);
+    // the footer views trade the city centre for KLIA and Sepang
+    const south = view === "panorama" || view === "flyover" ? buildSouth(glowSprite) : null;
+    if (south) scene.add(south.group);
+    else scene.add(klcc, menara, merdeka);
 
     // night glows at the crowns
     const glows = [
@@ -296,13 +300,14 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     glows[1].position.set(0.85, 4.9, 0.1);
     glows[2].position.set(3.6, 4.15, -2.1);
     glows[3].position.set(-3.3, 6.4, -4.9);
-    scene.add(...glows);
+    if (south) glows.splice(0, glows.length, ...south.glows);
+    scene.add(...glows.filter((g) => !g.parent)); // the plane and car carry their own lights
 
     // filler city, deterministic-ish so it doesn't reshuffle on every mount
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const box = new THREE.BoxGeometry(1, 1, 1);
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < (south ? 0 : 70); i++) {
       const x = (rnd() - 0.5) * 14,
         z = -5 + rnd() * 7.5;
       if (Math.abs(x) < 1.7 && z > -1.5) continue; // keep KLCC clear
@@ -397,7 +402,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     let boltUntil = 0;
     const strike = () => {
       const r = rnd();
-      const target = r < 0.4 ? merdeka : r < 0.7 ? twinR : menara;
+      const target = south ? south.targets[r < 0.6 ? 0 : 1] : r < 0.4 ? merdeka : r < 0.7 ? twinR : menara;
       const tip = target.userData.tip.clone().add(target.position);
       const pts: THREE.Vector3[] = [];
       for (let k = 0, y = 9.5; y > tip.y; k++, y -= 0.45 + rnd() * 0.35)
@@ -450,6 +455,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       glassMat.emissive.set("#a9c8f0");
       glassMat.emissiveIntensity = day ? 0 : 0.3;
       glows.forEach((g) => (g.visible = !day));
+      south?.retheme(bg, text, accent, day, k);
       groundMat.color.copy(bg.clone().lerp(text, 0.08));
       roofMat.color.copy(bg.clone().lerp(text, 0.22 * k));
       personMat.color.copy(bg.clone().lerp(text, 0.75));
@@ -509,7 +515,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
         camera.lookAt(-1.6, 3.4, -1);
       } else {
         // wide strips: keep ~22 units of city across whatever the aspect is
-        const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(11 / (20 * camera.aspect))), 18, 40);
+        const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(11 / (16 * camera.aspect))), 18, 40);
         if (Math.abs(camera.fov - fov) > 0.1) {
           camera.fov = fov;
           camera.updateProjectionMatrix();
@@ -518,10 +524,11 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
         const r = el.getBoundingClientRect();
         const f = view === "flyover" && !reduce ? 1 - Math.min(1, Math.max(0, (window.innerHeight - r.top) / r.height)) : 0;
         const k = f * f * (3 - 2 * f);
-        camera.position.set(camX * 1.4, THREE.MathUtils.lerp(2.2, 15, k) + camY * 0.4, THREE.MathUtils.lerp(20, 13, k));
-        camera.lookAt(0.2, THREE.MathUtils.lerp(3.9, 0, k), THREE.MathUtils.lerp(-1, -2.5, k));
+        camera.position.set(camX * 1.4, THREE.MathUtils.lerp(3.8, 15, k) + camY * 0.4, THREE.MathUtils.lerp(16, 12, k));
+        camera.lookAt(0.2, THREE.MathUtils.lerp(1.9, 0, k), THREE.MathUtils.lerp(-1.5, -2.5, k));
       }
 
+      south?.animate(reduce ? 4 : t);
       if (clouds.visible)
         clouds.children.forEach((cl) => {
           cl.position.x += cl.userData.speed * dt;

@@ -3,7 +3,7 @@ import "./App.css";
 import { WeatherChip, WeatherHero, useWeatherTermLines } from "./weather/WeatherHero";
 import { useWeather } from "./weather/WeatherProvider";
 import { use3D } from "./prototype/Options3D";
-import { CssStack, DepthPortrait, Tilt } from "./three/Css3D";
+import { CssStack, DepthPortrait, FlipCard, Tilt } from "./three/Css3D";
 import { LAYER_OF, type LayerKey } from "./three/layers";
 
 const StackScene = lazy(() => import("./three/StackScene"));
@@ -116,6 +116,39 @@ function App(): React.ReactElement {
   const { cond, isDay } = useWeather();
   const [layer, setLayer] = useState<LayerKey | null>(null);
   const tiltIf = (on: boolean, node: React.ReactNode) => (on ? <Tilt>{node}</Tilt> : node);
+
+  const depthPortrait = (
+    <DepthPortrait
+      src="/portrait-steps.png"
+      alt="Khawarizmi Jefri"
+      chips={[
+        { icon: "ph-map-pin", text: "Kuala Lumpur", x: "-8%", y: "10%", z: 90 },
+        { icon: "ph-graduation-cap", text: "Software Eng · USM", x: "50%", y: "58%", z: 60 },
+        { icon: "ph-code", text: "Go · React · TS", x: "-4%", y: "78%", z: 120 },
+      ]}
+    />
+  );
+  const rooftop = (
+    <div
+      role="img"
+      aria-label="Khawarizmi on a rooftop looking out over the Kuala Lumpur skyline"
+      style={{
+        position: "relative",
+        aspectRatio: "4 / 5",
+        borderRadius: "var(--radius-lg)",
+        overflow: "hidden",
+        boxShadow: "var(--shadow-sm)",
+        border: "1px solid color-mix(in srgb, var(--color-text) 10%, transparent)",
+      }}
+    >
+      <Suspense fallback={null}>
+        <Skyline cond={cond} isDay={isDay} view="rooftop" />
+      </Suspense>
+      <span className="tag tag-outline" style={{ position: "absolute", left: 14, bottom: 14, background: "var(--color-surface)" }}>
+        <i className="ph ph-map-pin" /> KL, right now
+      </span>
+    </div>
+  );
 
   const terminal = (
     <div style={{ position: "relative" }}>
@@ -611,37 +644,12 @@ function App(): React.ReactElement {
           }}
         >
           {fx.about === "depth" ? (
-            <div ref={reveal}>
-              <DepthPortrait
-                src="/portrait-steps.png"
-                alt="Khawarizmi Jefri"
-                chips={[
-                  { icon: "ph-map-pin", text: "Kuala Lumpur", x: "-8%", y: "10%", z: 90 },
-                  { icon: "ph-graduation-cap", text: "Software Eng · USM", x: "52%", y: "30%", z: 60 },
-                  { icon: "ph-code", text: "Go · React · TS", x: "-4%", y: "74%", z: 120 },
-                ]}
-              />
-            </div>
+            <div ref={reveal}>{depthPortrait}</div>
           ) : fx.about === "rooftop" ? (
-            <div
-              ref={reveal}
-              role="img"
-              aria-label="Khawarizmi on a rooftop looking out over the Kuala Lumpur skyline"
-              style={{
-                position: "relative",
-                aspectRatio: "4 / 5",
-                borderRadius: "var(--radius-lg)",
-                overflow: "hidden",
-                boxShadow: "var(--shadow-sm)",
-                border: "1px solid color-mix(in srgb, var(--color-text) 10%, transparent)",
-              }}
-            >
-              <Suspense fallback={null}>
-                <Skyline cond={cond} isDay={isDay} view="rooftop" />
-              </Suspense>
-              <span className="tag tag-outline" style={{ position: "absolute", left: 14, bottom: 14, background: "var(--color-surface)" }}>
-                <i className="ph ph-map-pin" /> KL, right now
-              </span>
+            <div ref={reveal}>{rooftop}</div>
+          ) : fx.about === "flip" ? (
+            <div ref={reveal}>
+              <FlipCard front={depthPortrait} back={rooftop} labels={["Photo", "Rooftop 3D"]} />
             </div>
           ) : (
             <div

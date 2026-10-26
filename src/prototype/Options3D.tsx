@@ -28,13 +28,14 @@ export const SECTIONS = {
       ["off", "Off · current"],
       ["depth", "A · Depth card (CSS)"],
       ["rooftop", "B · Rooftop in the skyline"],
+      ["flip", "C · Flip between A and B"],
     ],
   },
   contact: {
     label: "Contact",
     options: [
       ["off", "Off · current"],
-      ["panorama", "A · Skyline panorama"],
+      ["panorama", "A · KLIA + Sepang panorama"],
       ["flyover", "B · Fly-over on scroll"],
     ],
   },
@@ -44,7 +45,7 @@ type Section = keyof typeof SECTIONS;
 export type Choice<S extends Section> = (typeof SECTIONS)[S]["options"][number][0];
 type Choices = { [S in Section]: Choice<S> };
 
-const DEFAULTS: Choices = { work: "devices", stack: "explode", about: "rooftop", contact: "panorama" };
+const DEFAULTS: Choices = { work: "devices", stack: "explode", about: "flip", contact: "panorama" };
 
 function readChoices(): Choices {
   const p = new URLSearchParams(window.location.search);
