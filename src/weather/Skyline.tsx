@@ -5,6 +5,13 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { Condition } from "./useKLWeather";
 
+// hero      – the original framing beside the headline
+// panorama  – wide, low strip for the footer
+// flyover   – footer strip whose camera descends from an aerial view to street level as you reach the bottom
+// rooftop   – a figure on a rooftop in the foreground, looking out at the city (About). Drop a model at
+//             public/me.glb and it replaces the placeholder figure.
+export type SkylineView = "hero" | "panorama" | "flyover" | "rooftop";
+
 /* ── palette bridge: CSS oklch() tokens → THREE.Color via a 1×1 canvas ── */
 const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
 function cssColor(varName: string) {
@@ -127,6 +134,30 @@ function merdeka118(glassMat: THREE.Material, tipMat: THREE.Material) {
   return g;
 }
 
+// Placeholder low-poly person, ~1 unit tall, facing -z (toward the city).
+function figure(mat: THREE.Material, accentMat: THREE.Material) {
+  const g = new THREE.Group();
+  const leg = new THREE.CylinderGeometry(0.05, 0.045, 0.46, 6);
+  [-0.07, 0.07].forEach((x) => {
+    const l = new THREE.Mesh(leg, mat);
+    l.position.set(x, 0.23, 0);
+    g.add(l);
+  });
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.36, 7), accentMat);
+  torso.position.y = 0.64;
+  const arm = new THREE.CylinderGeometry(0.035, 0.03, 0.36, 5);
+  [-1, 1].forEach((s) => {
+    const a = new THREE.Mesh(arm, accentMat);
+    a.position.set(s * 0.19, 0.62, 0);
+    a.rotation.z = s * 0.12;
+    g.add(a);
+  });
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), mat);
+  head.position.y = 0.94;
+  g.add(torso, head);
+  return g;
+}
+
 function glowSprite(color: THREE.Color, size: number) {
   const c = document.createElement("canvas");
   c.width = c.height = 64;
@@ -196,7 +227,7 @@ function recipe(cond: Condition, isDay: boolean): Recipe {
   }
 }
 
-export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boolean }) {
+export default function Skyline({ cond, isDay, view = "hero" }: { cond: Condition; isDay: boolean; view?: SkylineView }) {
   const host = useRef<HTMLDivElement>(null);
   const applyRef = useRef<(c: Condition, d: boolean) => void>(() => {});
 
@@ -283,9 +314,47 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       b.position.set(x, h / 2, z);
       scene.add(b);
     }
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(16, 32), groundMat);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), groundMat);
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
+
+    // rooftop view: a building in the foreground with someone standing on it
+    const roofMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 });
+    const personMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.7 });
+    const shirtMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.7 });
+    if (view === "rooftop") {
+      const roof = new THREE.Group();
+      const block = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 2.2), roofMat);
+      block.position.y = 1.2;
+      const ledge = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.12, 0.12), roofMat);
+      ledge.position.set(0, 2.46, -1.05);
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.4, 8), roofMat);
+      tank.position.set(0.8, 2.6, 0.5);
+      const person = figure(personMat, shirtMat);
+      person.position.set(-0.25, 2.4, -0.55);
+      person.rotation.y = 0.5;
+      person.scale.setScalar(0.85);
+      roof.add(block, ledge, tank, person);
+      roof.position.set(2.3, 0, 7.2);
+      scene.add(roof);
+      // the loader is only fetched for this view; without a model the placeholder stays
+      import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) =>
+        new GLTFLoader().load(
+          "/me.glb",
+          (gltf) => {
+            const me = gltf.scene;
+            const size = new THREE.Box3().setFromObject(me).getSize(new THREE.Vector3());
+            me.scale.setScalar(0.85 / Math.max(size.y, 0.001));
+            me.position.copy(person.position);
+            me.rotation.y = person.rotation.y;
+            roof.remove(person);
+            roof.add(me);
+          },
+          undefined,
+          () => {},
+        ),
+      );
+    }
 
     // clouds: clusters of squashed icosahedrons
     const cloudMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 1, transparent: true, opacity: 0.92 });
@@ -382,6 +451,11 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       glassMat.emissiveIntensity = day ? 0 : 0.3;
       glows.forEach((g) => (g.visible = !day));
       groundMat.color.copy(bg.clone().lerp(text, 0.08));
+      roofMat.color.copy(bg.clone().lerp(text, 0.22 * k));
+      personMat.color.copy(bg.clone().lerp(text, 0.75));
+      shirtMat.color.copy(accent);
+      shirtMat.emissive.copy(accent);
+      shirtMat.emissiveIntensity = day ? 0 : 0.35;
       cloudMat.color.copy(
         bg.clone().lerp(text, state.clouds === "light" ? 0.55 : state.clouds === "dark" ? 0.32 : 0.22),
       );
@@ -427,8 +501,26 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       const t = now / 1000;
       camX += ((reduce ? 0 : Math.sin(t * 0.08) * 1.4) + mx * 1.1 - camX) * 0.04;
       camY += (my * -0.5 - camY) * 0.04;
-      camera.position.set(camX, 3 + camY, 16);
-      camera.lookAt(0.4, 3.5, -1);
+      if (view === "hero") {
+        camera.position.set(camX, 3 + camY, 16);
+        camera.lookAt(0.4, 3.5, -1);
+      } else if (view === "rooftop") {
+        camera.position.set(4.2 + camX * 0.5, 4 + camY * 0.4, 11.8);
+        camera.lookAt(-1.6, 3.4, -1);
+      } else {
+        // wide strips: keep ~22 units of city across whatever the aspect is
+        const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(11 / (20 * camera.aspect))), 18, 40);
+        if (Math.abs(camera.fov - fov) > 0.1) {
+          camera.fov = fov;
+          camera.updateProjectionMatrix();
+        }
+        // flyover: aerial while the footer enters, street level once you reach the bottom of the page
+        const r = el.getBoundingClientRect();
+        const f = view === "flyover" && !reduce ? 1 - Math.min(1, Math.max(0, (window.innerHeight - r.top) / r.height)) : 0;
+        const k = f * f * (3 - 2 * f);
+        camera.position.set(camX * 1.4, THREE.MathUtils.lerp(2.2, 15, k) + camY * 0.4, THREE.MathUtils.lerp(20, 13, k));
+        camera.lookAt(0.2, THREE.MathUtils.lerp(3.9, 0, k), THREE.MathUtils.lerp(-1, -2.5, k));
+      }
 
       if (clouds.visible)
         clouds.children.forEach((cl) => {
@@ -464,7 +556,7 @@ export default function Skyline({ cond, isDay }: { cond: Condition; isDay: boole
       renderer.dispose();
       el.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     applyRef.current(cond, isDay);

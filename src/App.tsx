@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { WeatherChip, WeatherHero, useWeatherTermLines } from "./weather/WeatherHero";
+import { useWeather } from "./weather/WeatherProvider";
+import { use3D } from "./prototype/Options3D";
+import { CssStack, DepthPortrait, Tilt } from "./three/Css3D";
+import { LAYER_OF, type LayerKey } from "./three/layers";
+
+const StackScene = lazy(() => import("./three/StackScene"));
+const DeviceScene = lazy(() => import("./three/DeviceScene"));
+const Skyline = lazy(() => import("./weather/Skyline"));
 
 const OPEN_TO_WORK = true;
 const SHOW_DEMOS = true;
@@ -104,6 +112,10 @@ function App(): React.ReactElement {
   const termLines = useMemo(() => [...TERM_LINES, ...weatherLines], [weatherLines]);
   const term = useTerminalLines(termLines);
   const reveal = useReveal();
+  const fx = use3D();
+  const { cond, isDay } = useWeather();
+  const [layer, setLayer] = useState<LayerKey | null>(null);
+  const tiltIf = (on: boolean, node: React.ReactNode) => (on ? <Tilt>{node}</Tilt> : node);
 
   const terminal = (
     <div style={{ position: "relative" }}>
@@ -256,13 +268,24 @@ function App(): React.ReactElement {
               marginBottom: 56,
             }}
           >
-            <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-sm)", aspectRatio: "16 / 10" }}>
-              <img
-                src="/clover.png"
-                alt="Clover access-control web app, welcome screen"
-                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", display: "block" }}
-              />
-            </div>
+            {fx.work === "devices" ? (
+              <div style={{ aspectRatio: "16 / 11", margin: "-32px -16px" }} role="img" aria-label="Clover access-control web app on a laptop">
+                <Suspense fallback={null}>
+                  <DeviceScene kind="laptop" src="/clover.png" />
+                </Suspense>
+              </div>
+            ) : (
+              tiltIf(
+                fx.work === "tilt",
+                <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-sm)", aspectRatio: "16 / 10" }}>
+                  <img
+                    src="/clover.png"
+                    alt="Clover access-control web app, welcome screen"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", display: "block" }}
+                  />
+                </div>,
+              )
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-start" }}>
               <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-accent)" }}>
                 Featured · Access control
@@ -284,7 +307,7 @@ function App(): React.ReactElement {
             ref={reveal}
             style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}
           >
-            <div className="card elev-sm" style={{ padding: 0, overflow: "hidden", gap: 0 }}>
+            {tiltIf(fx.work !== "off", <div className="card elev-sm" style={{ padding: 0, overflow: "hidden", gap: 0, height: "100%" }}>
               <div style={{ aspectRatio: "16 / 9" }}>
                 <img
                   src="/portal.png"
@@ -305,8 +328,8 @@ function App(): React.ReactElement {
                   <span className="tag tag-neutral">React</span>
                 </div>
               </div>
-            </div>
-            <div className="card elev-sm" style={{ padding: 0, overflow: "hidden", gap: 0 }}>
+            </div>)}
+            {tiltIf(fx.work === "tilt", <div className="card elev-sm" style={{ padding: 0, overflow: "hidden", gap: 0, height: "100%" }}>
               <div
                 style={{
                   aspectRatio: "16 / 9",
@@ -318,18 +341,26 @@ function App(): React.ReactElement {
                     "radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 70%), color-mix(in srgb, var(--color-text) 5%, transparent)",
                 }}
               >
-                <img
-                  src="/gethealthy.png"
-                  alt="Get Healthy workout app, today's plan"
-                  style={{
-                    width: "47%",
-                    minWidth: 130,
-                    marginTop: 26,
-                    borderRadius: "14px 14px 0 0",
-                    boxShadow: "var(--shadow-md)",
-                    display: "block",
-                  }}
-                />
+                {fx.work === "devices" ? (
+                  <div style={{ width: "100%", height: "100%" }} role="img" aria-label="Get Healthy workout app on a phone">
+                    <Suspense fallback={null}>
+                      <DeviceScene kind="phone" src="/gethealthy.png" />
+                    </Suspense>
+                  </div>
+                ) : (
+                  <img
+                    src="/gethealthy.png"
+                    alt="Get Healthy workout app, today's plan"
+                    style={{
+                      width: "47%",
+                      minWidth: 130,
+                      marginTop: 26,
+                      borderRadius: "14px 14px 0 0",
+                      boxShadow: "var(--shadow-md)",
+                      display: "block",
+                    }}
+                  />
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 20, alignItems: "flex-start" }}>
                 <span className="card-kicker">Mobile</span>
@@ -343,7 +374,7 @@ function App(): React.ReactElement {
                   <span className="tag tag-outline">In development</span>
                 </div>
               </div>
-            </div>
+            </div>)}
           </div>
         </div>
       </section>
@@ -364,7 +395,34 @@ function App(): React.ReactElement {
               The point isn't the list. It's that the same engineer carries a feature from schema to screen.
             </p>
           </div>
-          <div ref={reveal} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 48 }}>
+          <div
+            ref={reveal}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+              gap: 48,
+              alignItems: "center",
+            }}
+          >
+            {fx.stack !== "off" && (
+              <div style={{ height: "clamp(380px, 44vw, 500px)" }}>
+                {fx.stack === "css" ? (
+                  <CssStack active={layer} />
+                ) : (
+                  <Suspense fallback={null}>
+                    <StackScene key={fx.stack} mode={fx.stack} active={layer} />
+                  </Suspense>
+                )}
+              </div>
+            )}
+            {/* with a 3D stack the two lists share the second column */}
+            <div
+              style={
+                fx.stack === "off"
+                  ? { display: "contents" }
+                  : { display: "flex", flexDirection: "column", gap: 36 }
+              }
+            >
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <h6 style={{ color: "var(--color-neutral-500)", margin: "0 0 14px" }}>Up front</h6>
               {[
@@ -374,7 +432,11 @@ function App(): React.ReactElement {
               ].map((row) => (
                 <div
                   key={row.name}
+                  onPointerEnter={() => setLayer(LAYER_OF[row.name])}
+                  onPointerLeave={() => setLayer(null)}
                   style={{
+                    opacity: layer && LAYER_OF[row.name] !== layer ? 0.45 : 1,
+                    transition: "opacity 0.3s ease",
                     display: "flex",
                     gap: 14,
                     padding: "14px 0",
@@ -404,7 +466,11 @@ function App(): React.ReactElement {
               ].map((row) => (
                 <div
                   key={row.name}
+                  onPointerEnter={() => setLayer(LAYER_OF[row.name])}
+                  onPointerLeave={() => setLayer(null)}
                   style={{
+                    opacity: layer && LAYER_OF[row.name] !== layer ? 0.45 : 1,
+                    transition: "opacity 0.3s ease",
                     display: "flex",
                     gap: 14,
                     padding: "14px 0",
@@ -420,6 +486,7 @@ function App(): React.ReactElement {
                   </div>
                 </div>
               ))}
+            </div>
             </div>
           </div>
         </div>
@@ -543,32 +610,67 @@ function App(): React.ReactElement {
             alignItems: "center",
           }}
         >
-          <div
-            ref={reveal}
-            style={{
-              position: "relative",
-              borderRadius: "var(--radius-lg)",
-              overflow: "hidden",
-              boxShadow: "var(--shadow-sm)",
-              aspectRatio: "4 / 5",
-              border: "1px solid color-mix(in srgb, var(--color-text) 10%, transparent)",
-            }}
-          >
-            <img
-              src="/portrait-steps.png"
-              alt="Khawarizmi Jefri"
-              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 28%", display: "block" }}
-            />
+          {fx.about === "depth" ? (
+            <div ref={reveal}>
+              <DepthPortrait
+                src="/portrait-steps.png"
+                alt="Khawarizmi Jefri"
+                chips={[
+                  { icon: "ph-map-pin", text: "Kuala Lumpur", x: "-8%", y: "10%", z: 90 },
+                  { icon: "ph-graduation-cap", text: "Software Eng · USM", x: "52%", y: "30%", z: 60 },
+                  { icon: "ph-code", text: "Go · React · TS", x: "-4%", y: "74%", z: 120 },
+                ]}
+              />
+            </div>
+          ) : fx.about === "rooftop" ? (
             <div
+              ref={reveal}
+              role="img"
+              aria-label="Khawarizmi on a rooftop looking out over the Kuala Lumpur skyline"
               style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(to top, var(--color-bg) 0%, color-mix(in srgb, var(--color-bg) 55%, transparent) 18%, transparent 52%), radial-gradient(120% 80% at 50% 30%, transparent 45%, color-mix(in srgb, var(--color-bg) 70%, transparent) 100%)",
-                pointerEvents: "none",
+                position: "relative",
+                aspectRatio: "4 / 5",
+                borderRadius: "var(--radius-lg)",
+                overflow: "hidden",
+                boxShadow: "var(--shadow-sm)",
+                border: "1px solid color-mix(in srgb, var(--color-text) 10%, transparent)",
               }}
-            />
-          </div>
+            >
+              <Suspense fallback={null}>
+                <Skyline cond={cond} isDay={isDay} view="rooftop" />
+              </Suspense>
+              <span className="tag tag-outline" style={{ position: "absolute", left: 14, bottom: 14, background: "var(--color-surface)" }}>
+                <i className="ph ph-map-pin" /> KL, right now
+              </span>
+            </div>
+          ) : (
+            <div
+              ref={reveal}
+              style={{
+                position: "relative",
+                borderRadius: "var(--radius-lg)",
+                overflow: "hidden",
+                boxShadow: "var(--shadow-sm)",
+                aspectRatio: "4 / 5",
+                border: "1px solid color-mix(in srgb, var(--color-text) 10%, transparent)",
+              }}
+            >
+              <img
+                src="/portrait-steps.png"
+                alt="Khawarizmi Jefri"
+                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 28%", display: "block" }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(to top, var(--color-bg) 0%, color-mix(in srgb, var(--color-bg) 55%, transparent) 18%, transparent 52%), radial-gradient(120% 80% at 50% 30%, transparent 45%, color-mix(in srgb, var(--color-bg) 70%, transparent) 100%)",
+                  pointerEvents: "none",
+                }}
+              />
+            </div>
+          )}
           <div ref={reveal} style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>
             <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-accent)" }}>
               04 / About
@@ -616,6 +718,23 @@ function App(): React.ReactElement {
               khawarizmijefri02@gmail.com
             </a>
           </div>
+        </div>
+        {fx.contact !== "off" && (
+          <div
+            aria-hidden
+            style={{
+              height: fx.contact === "flyover" ? "clamp(340px, 42vw, 520px)" : "clamp(260px, 30vw, 380px)",
+              marginTop: -40,
+              maskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 80%, transparent)",
+              WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 30%, #000 80%, transparent)",
+            }}
+          >
+            <Suspense fallback={null}>
+              <Skyline key={fx.contact} cond={cond} isDay={isDay} view={fx.contact} />
+            </Suspense>
+          </div>
+        )}
+        <div style={{ maxWidth: 1120, margin: "40px auto 0", padding: "0 32px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
               <a

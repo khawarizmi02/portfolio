@@ -4,11 +4,14 @@ import './index.css'
 import './styles/nocturne.css'
 import App from './App.tsx'
 import { WeatherProvider } from './weather/WeatherProvider.tsx'
+import { Options3D } from './prototype/Options3D.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <WeatherProvider>
-      <App />
+      <Options3D>
+        <App />
+      </Options3D>
     </WeatherProvider>
   </StrictMode>,
 )
