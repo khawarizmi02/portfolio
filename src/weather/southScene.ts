@@ -5,6 +5,7 @@
 //            leaf-canopy grandstand between them, and a car lapping it
 // Oil palms fill the gaps. Weather, fog and lighting come from Skyline.
 import * as THREE from "three";
+import type GUI from "lil-gui";
 
 const flat = (o: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85, ...o });
@@ -22,6 +23,16 @@ const SEPANG = [
   -114,274, -192,313, -212,319, -237,323, -258,322, -298,315, -325,304, -343,290, -367,259, -375,236, -376,222,
   -366,206, -345,197, 493,44, 505,34, 514,13, 510,-3, 494,-19, 469,-23,
 ];
+// Hand-placed pieces. In dev, the "Tweak footer scene" panel edits these live; its "Copy layout" button
+// puts the current values on the clipboard, ready to paste over this object.
+// prettier-ignore
+export const LAYOUT = {
+  grandstand: { x: 3.93, z: -0.98, rotation: 3.22, scale: 1, depth: 1 },
+  tower: { x: -1.5, z: -2.4, scale: 0.52 },
+  kliaLabel: { x: -5.6, y: 2.5, z: -3.2 },
+  sepangLabel: { x: 5.83, y: 2.1, z: -4.9 },
+};
+
 const TRACK_SCALE = 0.0078;
 const TRACK_AT = new THREE.Vector3(5.1, 0, -1.7);
 const trackPoint = (x: number, z: number) => new THREE.Vector3(x * TRACK_SCALE, 0, z * TRACK_SCALE).add(TRACK_AT);
@@ -223,14 +234,14 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
   group.add(apronMesh);
 
   const tower = klTower(concrete, glass, tipMat);
-  tower.scale.setScalar(0.52);
-  tower.position.set(-1.5, 0, -2.4);
-  tower.userData.tip = new THREE.Vector3(0, 6.9 * 0.52, 0);
+  tower.userData.tip = new THREE.Vector3(0, 6.9, 0);
   group.add(tower);
-  const cabGlow = glow(new THREE.Color("#e6f0ff"), 1.1);
-  cabGlow.position.set(-1.5, 2.69, -2.3);
-  const beacon = glow(new THREE.Color("#ff6b5a"), 0.6);
-  beacon.position.set(-1.5, 3.59, -2.4);
+  // glows ride on the tower, so they follow it when it's moved or scaled
+  const cabGlow = glow(new THREE.Color("#e6f0ff"), 2.1);
+  cabGlow.position.set(0, 5.16, 0.2);
+  const beacon = glow(new THREE.Color("#ff6b5a"), 1.15);
+  beacon.position.set(0, 6.9, 0);
+  tower.add(cabGlow, beacon);
   glows.push(cabGlow, beacon);
 
   const terminal = new THREE.Group();
@@ -333,14 +344,12 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
     mast.position.set(x, 0.49, -0.3);
     grand.add(l, mast);
   }
-  grand.position.copy(trackPoint(-150, 92));
-  grand.rotation.y = Math.PI + 0.08; // seats face the main straight
   grand.userData.tip = new THREE.Vector3(0, 1.1, 0);
   group.add(grand);
-  grand.updateMatrixWorld();
   [-0.9, 0, 0.9].forEach((x) => {
     const f = glow(new THREE.Color("#fff3d6"), 0.7);
-    f.position.copy(grand.localToWorld(new THREE.Vector3(x, 1.3, -0.3)));
+    f.position.set(x, 1.3, -0.3);
+    grand.add(f);
     glows.push(f);
   });
 
@@ -353,10 +362,54 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
 
   /* ── labels ── */
   const klia = label("KLIA");
-  klia.sp.position.set(-5.6, 2.5, -3.2);
   const sepang = label("SEPANG");
-  sepang.sp.position.set(box.getCenter(new THREE.Vector3()).x, 2.1, box.min.z + 0.6);
   group.add(klia.sp, sepang.sp);
+
+  const place = () => {
+    const G = LAYOUT.grandstand,
+      T = LAYOUT.tower;
+    grand.position.set(G.x, 0, G.z);
+    grand.rotation.y = G.rotation; // ≈ π: seats face the main straight
+    grand.scale.set(G.scale, G.scale, G.scale * G.depth);
+    tower.position.set(T.x, 0, T.z);
+    tower.scale.setScalar(T.scale);
+    klia.sp.position.set(LAYOUT.kliaLabel.x, LAYOUT.kliaLabel.y, LAYOUT.kliaLabel.z);
+    sepang.sp.position.set(LAYOUT.sepangLabel.x, LAYOUT.sepangLabel.y, LAYOUT.sepangLabel.z);
+  };
+  place();
+
+  const addTweaks = (gui: GUI) => {
+    const folder = (name: string, obj: Record<string, number>, ranges: Record<string, [number, number]>) => {
+      const f = gui.addFolder(name);
+      Object.entries(ranges).forEach(([k, [lo, hi]]) => f.add(obj, k, lo, hi, 0.01).onChange(place));
+    };
+    folder("Sepang grandstand", LAYOUT.grandstand, {
+      x: [0, 11],
+      z: [-6, 3],
+      rotation: [0, Math.PI * 2],
+      scale: [0.3, 2.5],
+      depth: [0.3, 2],
+    });
+    folder("KLIA tower", LAYOUT.tower, { x: [-11, 11], z: [-6, 3], scale: [0.2, 1.2] });
+    folder("KLIA label", LAYOUT.kliaLabel, { x: [-12, 12], y: [0, 5], z: [-8, 3] });
+    folder("Sepang label", LAYOUT.sepangLabel, { x: [-12, 12], y: [0, 5], z: [-8, 3] });
+    gui.add(
+      {
+        "Copy layout": () => {
+          const round = (o: Record<string, number>) =>
+            `{ ${Object.entries(o)
+              .map(([k, v]) => `${k}: ${+v.toFixed(2)}`)
+              .join(", ")} }`;
+          const text = `export const LAYOUT = {\n${Object.entries(LAYOUT)
+            .map(([k, v]) => `  ${k}: ${round(v)},`)
+            .join("\n")}\n};`;
+          console.log(text);
+          navigator.clipboard?.writeText(text).catch(() => {});
+        },
+      },
+      "Copy layout",
+    );
+  };
 
   /* ── oil palms: a plantation behind everything, and clumps at the far edges ── */
   for (let i = 0; i < 140; i++) {
@@ -411,5 +464,5 @@ export function buildSouth(glow: (c: THREE.Color, size: number) => THREE.Sprite)
     racer.rotation.y = Math.atan2(-tan.z, tan.x);
   };
 
-  return { group, glows, targets: [tower, grand], retheme, animate };
+  return { group, glows, targets: [tower, grand], retheme, animate, addTweaks };
 }

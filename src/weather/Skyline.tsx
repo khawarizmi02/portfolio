@@ -301,7 +301,21 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     glows[2].position.set(3.6, 4.15, -2.1);
     glows[3].position.set(-3.3, 6.4, -4.9);
     if (south) glows.splice(0, glows.length, ...south.glows);
-    scene.add(...glows.filter((g) => !g.parent)); // the plane and car carry their own lights
+    // dev only: sliders for the hand-placed pieces of the footer scene (lil-gui loads on demand)
+    let gui: { destroy(): void } | null = null;
+    let disposed = false;
+    if (south && import.meta.env.DEV)
+      import("lil-gui").then(({ default: GUI }) => {
+        if (disposed) return;
+        const g = new GUI({ title: "Tweak footer scene" });
+        g.domElement.style.top = "64px"; // below the sticky nav
+        south.addTweaks(g);
+        g.close();
+        gui = g;
+      });
+    // landmarks and vehicles in the footer scene carry their own lights
+    const loose = glows.filter((g) => !g.parent);
+    if (loose.length) scene.add(...loose);
 
     // filler city, deterministic-ish so it doesn't reshuffle on every mount
     let seed = 7;
@@ -403,7 +417,7 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
     const strike = () => {
       const r = rnd();
       const target = south ? south.targets[r < 0.6 ? 0 : 1] : r < 0.4 ? merdeka : r < 0.7 ? twinR : menara;
-      const tip = target.userData.tip.clone().add(target.position);
+      const tip = target.localToWorld(target.userData.tip.clone());
       const pts: THREE.Vector3[] = [];
       for (let k = 0, y = 9.5; y > tip.y; k++, y -= 0.45 + rnd() * 0.35)
         pts.push(new THREE.Vector3(tip.x + (k === 0 ? 0 : (rnd() - 0.5) * 0.8), y, tip.z));
@@ -562,6 +576,8 @@ export default function Skyline({ cond, isDay, view = "hero" }: { cond: Conditio
       io.disconnect();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("wx:strike", strike);
+      disposed = true;
+      gui?.destroy();
       renderer.dispose();
       el.removeChild(renderer.domElement);
     };
